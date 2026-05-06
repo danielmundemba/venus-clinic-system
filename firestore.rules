@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isDoctor() {
+      return isAuthenticated() && getUserRole() == 'doctor';
+    }
+    
+    function isReceptionist() {
+      return isAuthenticated() && getUserRole() == 'receptionist';
+    }
+    
+    function isNurse() {
+      return isAuthenticated() && getUserRole() == 'nurse';
+    }
+    
+    function isMedicalStaff() {
+      return isDoctor() || isNurse();
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (request.auth.uid == userId && 
+        request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['firstName', 'lastName', 'phone']));
+      allow delete: if isAdmin();
+    }
+
+    match /doctors/{doctorId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /patients/{patientId} {
+      allow read: if isAuthenticated();
+      allow create: if isReceptionist() || isAdmin() || isMedicalStaff();
+      allow update: if isReceptionist() || isAdmin() || isMedicalStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /appointments/{apptId} {
+      allow read: if isAuthenticated();
+      allow create: if isReceptionist() || isAdmin() || isMedicalStaff();
+      allow update: if isReceptionist() || isAdmin() || isMedicalStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /medicalRecords/{recordId} {
+      allow read: if isMedicalStaff() || isAdmin();
+      allow create: if isMedicalStaff() || isAdmin();
+      allow update: if isMedicalStaff() || isAdmin();
+      allow delete: if false;
+    }
+
+    match /invoices/{invoiceId} {
+      allow read: if isReceptionist() || isAdmin();
+      allow create: if isReceptionist() || isAdmin();
+      allow update: if isReceptionist() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+  }
+}

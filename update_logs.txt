@@ -1,0 +1,7 @@
+=======================================================================================================
+========================== Code Update 06.05.26 - Daniel Mundemba =====================================
+
+1. Connected project to firebae
+2. Finished the auth system
+3. This update_logs file will be used to exaplain the code changes we have made 
+4. The rest of the files are just the initilization of the project. 
