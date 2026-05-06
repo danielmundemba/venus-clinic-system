@@ -5,7 +5,8 @@ import {
   FileText, 
   TrendingUp,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Activity
 } from 'lucide-react';
 
 // Widget components

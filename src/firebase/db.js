@@ -10,7 +10,10 @@ import {
   where,
   orderBy,
   limit,
-  serverTimestamp 
+  startAt,
+  endAt,
+  serverTimestamp,
+  writeBatch
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -50,7 +53,40 @@ export const deleteDocument = async (collectionName, docId) => {
   await deleteDoc(doc(db, collectionName, docId));
 };
 
-// Query helpers
-export const createQuery = (collectionName, ...constraints) => {
-  return query(collection(db, collectionName), ...constraints);
+// Search helpers
+export const searchPatients = async (searchTerm, maxResults = 20) => {
+  const term = searchTerm.toLowerCase().trim();
+  if (!term) return [];
+  
+  const q = query(
+    collection(db, 'patients'),
+    where('searchableName', '>=', term),
+    where('searchableName', '<=', term + '\uf8ff'),
+    limit(maxResults)
+  );
+  
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+export const searchPatientsByPhone = async (phone) => {
+  const q = query(
+    collection(db, 'patients'),
+    where('phone', '==', phone),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+// Batch write for audit logs
+export const batchWrite = async (operations) => {
+  const batch = writeBatch(db);
+  operations.forEach(({ type, collectionName, docId, data }) => {
+    const ref = doc(db, collectionName, docId);
+    if (type === 'set') batch.set(ref, data);
+    if (type === 'update') batch.update(ref, data);
+    if (type === 'delete') batch.delete(ref);
+  });
+  await batch.commit();
 };

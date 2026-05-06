@@ -1,6 +1,23 @@
 =======================================================================================================
 ========================== Code Update 06.05.26 - Daniel Mundemba =====================================
 
+Week 2 Task Completed
+1. Patient registration with validation ===> PatientRegistration.jsx
+2. Patient list with table view ===> PatientList.jsx
+3. Real-time search with dropdown ===> SearchBar.jsx
+4. Patient details view ===> PatientDetails.jsx
+5. Walk-in registration (2-step) ===> WalkInRegistration.jsx
+6. Audit logging hook ===> useAuditLog.js
+7. Firestore helpers + search ===> db.js
+8. Form validators ===> validators.js
+9. Formatters (date, age, phone) ===> formatters.js
+10. Modal component ===> Modal.jsx
+11. Updated routing ===> App.jsx
+
+
+=======================================================================================================
+========================== Code Update 06.05.26 - Daniel Mundemba =====================================
+
 1. Connected project to firebae
 2. Finished the auth system
 3. This update_logs file will be used to exaplain the code changes we have made 

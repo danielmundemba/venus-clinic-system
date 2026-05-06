@@ -6,8 +6,11 @@ import AuthLayout from './components/layout/AuthLayout';
 import DashboardLayout from './components/layout/DashboardLayout';
 import Login from './pages/auth/Login';
 import UnifiedDashboard from './pages/dashboard/UnifiedDashboard';
+import PatientList from './pages/patients/PatientList';
+import PatientDetails from './pages/patients/PatientDetails';
+import WalkInRegistration from './pages/appointments/WalkInRegistration';
 
-// Placeholder pages (we'll build these in Week 2+)
+// Placeholder pages
 const PlaceholderPage = ({ title }) => (
   <div className="card">
     <h1 className="text-xl font-bold text-venus-text-primary">{title}</h1>
@@ -15,7 +18,6 @@ const PlaceholderPage = ({ title }) => (
   </div>
 );
 
-const PatientList = () => <PlaceholderPage title="Patient List" />;
 const AppointmentSchedule = () => <PlaceholderPage title="Appointments" />;
 const MedicalRecords = () => <PlaceholderPage title="Medical Records" />;
 const Invoices = () => <PlaceholderPage title="Billing & Invoices" />;
@@ -40,19 +42,37 @@ function App() {
               </ProtectedRoute>
             }>
               <Route path="/dashboard" element={<UnifiedDashboard />} />
+              
+              {/* Patient Routes */}
               <Route path="/patients" element={<PatientList />} />
+              <Route path="/patients/:id" element={<PatientDetails />} />
+              
+              {/* Appointment Routes */}
               <Route path="/appointments" element={<AppointmentSchedule />} />
-              <Route path="/medical-records" element={<MedicalRecords />} />
+              <Route path="/appointments/walk-in" element={
+                <ProtectedRoute allowedRoles={['admin', 'receptionist', 'doctor', 'nurse']}>
+                  <WalkInRegistration />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/medical-records" element={
+                <ProtectedRoute allowedRoles={['admin', 'doctor', 'nurse']}>
+                  <MedicalRecords />
+                </ProtectedRoute>
+              } />
+              
               <Route path="/billing" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
                   <Invoices />
                 </ProtectedRoute>
               } />
+              
               <Route path="/admin/users" element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <UserManagement />
                 </ProtectedRoute>
               } />
+              
               <Route path="/admin/audit" element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AuditLogs />
@@ -60,7 +80,7 @@ function App() {
               } />
             </Route>
 
-            {/* Redirect */}
+            {/* Redirects */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

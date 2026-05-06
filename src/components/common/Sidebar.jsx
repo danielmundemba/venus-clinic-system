@@ -8,7 +8,8 @@ import {
   Receipt, 
   Shield, 
   LogOut,
-  Activity
+  Activity,
+  UserPlus
 } from 'lucide-react';
 import { logoutUser } from '../../firebase/auth';
 
@@ -34,6 +35,12 @@ const Sidebar = () => {
       label: 'Appointments', 
       icon: CalendarDays,
       roles: ['admin', 'doctor', 'receptionist', 'nurse']
+    },
+    { 
+      path: '/appointments/walk-in', 
+      label: 'Walk-in', 
+      icon: UserPlus,
+      roles: ['admin', 'receptionist', 'doctor', 'nurse']
     },
     { 
       path: '/medical-records', 
