@@ -9,6 +9,7 @@ import UnifiedDashboard from './pages/dashboard/UnifiedDashboard';
 import PatientList from './pages/patients/PatientList';
 import PatientDetails from './pages/patients/PatientDetails';
 import WalkInRegistration from './pages/appointments/WalkInRegistration';
+import AuditLogs from './pages/admin/Auditlogs';
 
 // Placeholder pages
 const PlaceholderPage = ({ title }) => (
@@ -22,7 +23,6 @@ const AppointmentSchedule = () => <PlaceholderPage title="Appointments" />;
 const MedicalRecords = () => <PlaceholderPage title="Medical Records" />;
 const Invoices = () => <PlaceholderPage title="Billing & Invoices" />;
 const UserManagement = () => <PlaceholderPage title="User Management" />;
-const AuditLogs = () => <PlaceholderPage title="Audit Logs" />;
 
 function App() {
   return (
