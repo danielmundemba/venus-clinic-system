@@ -1,15 +1,25 @@
+=======================================================================================================
+========================== Code Update 15.05.26 - Remmy Malasha =======================================
+
+1. Fixed Tailwind CSS utility resolution errors
+2. Moved `@tailwind base`, `@tailwind components`, and `@tailwind utilities` to the top of index.css
+3. Replaced invalid `@apply bg-venus-bg-primary` usage with CSS variable-based styling
+4. Preserved light/dark theme switching using `:root` and `.dark`
+5. Removed custom Tailwind plugin generating invalid utility classes
+6. Fixed Vite startup/build issues caused by unresolved Tailwind classes
+7. Cleaned and stabilized global styling configuration
 
 =======================================================================================================
 ========================== Code Update 15.05.26 - TWAAMBOTEMBO MWAANGA =====================================
-1. Added an Auditlogs page 
+
+1. Added an Auditlogs page
 2. Removed difault page from app.jsx for Auditlogs
-
-
 
 =======================================================================================================
 ========================== Code Update 06.05.26 - Daniel Mundemba =====================================
 
 Week 2 Task Completed
+
 1. Patient registration with validation ===> PatientRegistration.jsx
 2. Patient list with table view ===> PatientList.jsx
 3. Real-time search with dropdown ===> SearchBar.jsx
@@ -22,11 +32,10 @@ Week 2 Task Completed
 10. Modal component ===> Modal.jsx
 11. Updated routing ===> App.jsx
 
-
 =======================================================================================================
 ========================== Code Update 06.05.26 - Daniel Mundemba =====================================
 
 1. Connected project to firebae
 2. Finished the auth system
-3. This update_logs file will be used to exaplain the code changes we have made 
-4. The rest of the files are just the initilization of the project. 
+3. This update_logs file will be used to exaplain the code changes we have made
+4. The rest of the files are just the initilization of the project.

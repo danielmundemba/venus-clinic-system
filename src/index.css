@@ -11,6 +11,26 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
+  /* Venus Light Theme Variables (Default) - Opposite of Dark */
+  --venus-bg-primary: #F4F8FC;
+  --venus-bg-secondary: #EAF2F9;
+  --venus-bg-tertiary: #DFE9F3;
+  --venus-bg-elevated: #D3DFF0;
+  --venus-primary-400: #38BDF8;
+  --venus-primary-500: #0EA5E9;
+  --venus-primary-600: #0284C7;
+  --venus-text-primary: #0B1120;
+  --venus-text-secondary: #243447;
+  --venus-text-muted: #475569;
+  --venus-text-disabled: #64748B;
+  --venus-success: #059669;
+  --venus-warning: #D97706;
+  --venus-danger: #DC2626;
+  --venus-info: #7C3AED;
+  --venus-border-default: #CDD5E0;
+  --venus-border-hover: #A6B5C5;
+  --venus-border-focus: #0EA5E9;
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
@@ -28,6 +48,28 @@
   @media (max-width: 1024px) {
     font-size: 16px;
   }
+}
+
+/* Dark Theme */
+.dark {
+  --venus-bg-primary: #0B1120;
+  --venus-bg-secondary: #151E32;
+  --venus-bg-tertiary: #1E293B;
+  --venus-bg-elevated: #243447;
+  --venus-primary-400: #38BDF8;
+  --venus-primary-500: #0EA5E9;
+  --venus-primary-600: #0284C7;
+  --venus-text-primary: #F8FAFC;
+  --venus-text-secondary: #CBD5E1;
+  --venus-text-muted: #64748B;
+  --venus-text-disabled: #475569;
+  --venus-success: #10B981;
+  --venus-warning: #F59E0B;
+  --venus-danger: #EF4444;
+  --venus-info: #8B5CF6;
+  --venus-border-default: #334155;
+  --venus-border-hover: #475569;
+  --venus-border-focus: #0EA5E9;
 }
 
 @media (prefers-color-scheme: dark) {

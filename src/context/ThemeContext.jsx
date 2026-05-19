@@ -9,15 +9,15 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem('venus-theme');
     if (saved) {
       setIsDark(saved === 'dark');
     } else {
-      setIsDark(true);
-      localStorage.setItem('venus-theme', 'dark');
+      setIsDark(false);
+      localStorage.setItem('venus-theme', 'light');
     }
   }, []);
 

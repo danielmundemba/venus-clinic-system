@@ -1,6 +1,52 @@
+/* Tailwind Directives First */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* CSS Variables for Theme */
+:root {
+  /* Venus Light Theme Variables (Default) - Opposite of Dark */
+  --venus-bg-primary: #F4F8FC;
+  --venus-bg-secondary: #EAF2F9;
+  --venus-bg-tertiary: #DFE9F3;
+  --venus-bg-elevated: #D3DFF0;
+  --venus-primary-400: #38BDF8;
+  --venus-primary-500: #0EA5E9;
+  --venus-primary-600: #0284C7;
+  --venus-text-primary: #0B1120;
+  --venus-text-secondary: #243447;
+  --venus-text-muted: #475569;
+  --venus-text-disabled: #64748B;
+  --venus-success: #059669;
+  --venus-warning: #D97706;
+  --venus-danger: #DC2626;
+  --venus-info: #7C3AED;
+  --venus-border-default: #CDD5E0;
+  --venus-border-hover: #A6B5C5;
+  --venus-border-focus: #0EA5E9;
+}
+
+/* Dark Theme */
+.dark {
+  --venus-bg-primary: #0B1120;
+  --venus-bg-secondary: #151E32;
+  --venus-bg-tertiary: #1E293B;
+  --venus-bg-elevated: #243447;
+  --venus-primary-400: #38BDF8;
+  --venus-primary-500: #0EA5E9;
+  --venus-primary-600: #0284C7;
+  --venus-text-primary: #F8FAFC;
+  --venus-text-secondary: #CBD5E1;
+  --venus-text-muted: #64748B;
+  --venus-text-disabled: #475569;
+  --venus-success: #10B981;
+  --venus-warning: #F59E0B;
+  --venus-danger: #EF4444;
+  --venus-info: #8B5CF6;
+  --venus-border-default: #334155;
+  --venus-border-hover: #475569;
+  --venus-border-focus: #0EA5E9;
+}
 
 @layer base {
   html {
@@ -8,62 +54,148 @@
   }
   
   body {
-    @apply bg-venus-bg-primary text-venus-text-primary;
+    background-color: var(--venus-bg-primary);
+    color: var(--venus-text-primary);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 
-  /* Custom scrollbar for dark theme */
+  /* Custom scrollbar */
   ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-venus-bg-primary;
+    background-color: var(--venus-bg-primary);
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-venus-bg-tertiary rounded-full;
+    background-color: var(--venus-bg-tertiary);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-venus-border-hover;
+    background-color: var(--venus-border-hover);
   }
 
   /* Focus styles */
   *:focus-visible {
-    @apply outline-none ring-2 ring-venus-primary-500 ring-offset-2 ring-offset-venus-bg-primary;
+    outline: none;
+    box-shadow: 0 0 0 2px var(--venus-primary-500), 0 0 0 4px var(--venus-bg-primary);
   }
 }
 
 @layer components {
   .card {
-    @apply bg-venus-bg-secondary border border-venus-border rounded-xl p-6;
+    background-color: var(--venus-bg-secondary);
+    border: 1px solid var(--venus-border-default);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
   }
 
   .input-field {
-    @apply w-full bg-venus-bg-tertiary border border-venus-border rounded-lg px-4 py-3 
-           text-venus-text-primary placeholder-venus-text-muted
-           focus:border-venus-primary-500 focus:ring-1 focus:ring-venus-primary-500
-           transition-all duration-200;
+    width: 100%;
+    background-color: var(--venus-bg-tertiary);
+    border: 1px solid var(--venus-border-default);
+    border-radius: 0.5rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    color: var(--venus-text-primary);
+    transition: all 0.2s;
+  }
+
+  .input-field::placeholder {
+    color: var(--venus-text-muted);
+  }
+
+  .input-field:focus {
+    outline: none;
+    border-color: var(--venus-primary-500);
+    box-shadow: 0 0 0 1px var(--venus-primary-500);
   }
 
   .btn-primary {
-    @apply px-6 py-3 bg-venus-primary-500 hover:bg-venus-primary-600 
-           text-white font-medium rounded-lg
-           transition-all duration-200 shadow-glow hover:shadow-glow-lg
-           disabled:opacity-50 disabled:cursor-not-allowed;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    background-color: var(--venus-primary-500);
+    color: white;
+    font-weight: 500;
+    border-radius: 0.5rem;
+    transition: all 0.2s;
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.15);
+    border: none;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--venus-primary-600);
+    box-shadow: 0 0 30px rgba(14, 165, 233, 0.2);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .btn-secondary {
-    @apply px-6 py-3 bg-venus-bg-tertiary hover:bg-venus-bg-elevated 
-           text-venus-text-primary font-medium rounded-lg border border-venus-border
-           transition-all duration-200;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    background-color: var(--venus-bg-tertiary);
+    color: var(--venus-text-primary);
+    font-weight: 500;
+    border-radius: 0.5rem;
+    border: 1px solid var(--venus-border-default);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .btn-secondary:hover {
+    background-color: var(--venus-bg-elevated);
   }
 
   .btn-danger {
-    @apply px-6 py-3 bg-venus-danger/10 hover:bg-venus-danger/20 
-           text-venus-danger font-medium rounded-lg border border-venus-danger/30
-           transition-all duration-200;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    background-color: rgba(220, 38, 38, 0.1);
+    color: var(--venus-danger);
+    font-weight: 500;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .btn-danger:hover {
+    background-color: rgba(220, 38, 38, 0.2);
   }
 }
+
+  .btn-secondary:hover {
+    background-color: var(--venus-bg-elevated);
+  }
+
+  .btn-danger {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    background-color: rgba(220, 38, 38, 0.1);
+    color: var(--venus-danger);
+    font-weight: 500;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(220, 38, 38, 0.3);
+    transition: all 0.2s;
+    cursor: pointer;
+  }
+
+  .btn-danger:hover {
+    background-color: rgba(220, 38, 38, 0.2);
+  }
