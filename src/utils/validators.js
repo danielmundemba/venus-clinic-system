@@ -27,3 +27,74 @@ export const appointmentSchema = z.object({
   type: z.enum(['scheduled', 'walk-in']),
   notes: z.string().optional(),
 });
+
+// Medical Record Validators
+export const medicalRecordSchema = z.object({
+  patientId: z.string().min(1, 'Patient is required'),
+  visitDate: z.string().min(1, 'Visit date is required'),
+  visitTime: z.string().min(1, 'Visit time is required'),
+  visitType: z.enum(['outpatient', 'follow-up', 'emergency', 'review'], {
+    required_error: 'Please select a visit type',
+  }),
+  chiefComplaint: z.string().min(5, 'Chief complaint is required and must be at least 5 characters'),
+  
+  // Medical History
+  presentIllness: z.string().min(0).optional(),
+  pastMedicalHistory: z.string().min(0).optional(),
+  surgicalHistory: z.string().min(0).optional(),
+  familyHistory: z.string().min(0).optional(),
+  socialHistory: z.string().min(0).optional(),
+  
+  // Allergies
+  allergies: z.array(z.object({
+    name: z.string().min(1, 'Allergy name is required'),
+    reaction: z.string().min(1, 'Reaction is required'),
+    severity: z.enum(['mild', 'moderate', 'severe'], {
+      required_error: 'Please select severity',
+    }),
+  })).optional(),
+  
+  // Current Medications
+  currentMedications: z.array(z.object({
+    name: z.string().min(1, 'Medication name is required'),
+    dosage: z.string().min(1, 'Dosage is required'),
+    frequency: z.string().min(1, 'Frequency is required'),
+  })).optional(),
+  
+  // Vital Signs
+  temperature: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid temperature').optional(),
+  bloodPressureSystolic: z.string().regex(/^\d+$/, 'Invalid systolic pressure').optional(),
+  bloodPressureDiastolic: z.string().regex(/^\d+$/, 'Invalid diastolic pressure').optional(),
+  pulseRate: z.string().regex(/^\d+$/, 'Invalid pulse rate').optional(),
+  respiratoryRate: z.string().regex(/^\d+$/, 'Invalid respiratory rate').optional(),
+  oxygenSaturation: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid oxygen saturation').optional(),
+  weight: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid weight').optional(),
+  height: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid height').optional(),
+  
+  // Physical Examination
+  physicalExamination: z.string().min(0).optional(),
+  
+  // Diagnosis
+  primaryDiagnosis: z.string().min(1, 'Primary diagnosis is required'),
+  secondaryDiagnosis: z.string().min(0).optional(),
+  icdCode: z.string().min(0).optional(),
+  
+  // Lab Requests
+  labRequests: z.string().min(0).optional(),
+  imagingRequests: z.string().min(0).optional(),
+  
+  // Treatment Plan
+  prescribedMedications: z.string().min(1, 'Treatment plan must include prescribed medications or procedures'),
+  procedures: z.string().min(0).optional(),
+  doctorInstructions: z.string().min(0).optional(),
+  followUpInstructions: z.string().min(0).optional(),
+  
+  // Payment Information
+  consultationFee: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid consultation fee').optional(),
+  laboratoryFee: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid laboratory fee').optional(),
+  medicationFee: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid medication fee').optional(),
+  otherCharges: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Invalid other charges').optional(),
+  paymentStatus: z.enum(['paid', 'pending', 'insurance'], {
+    required_error: 'Please select payment status',
+  }),
+});

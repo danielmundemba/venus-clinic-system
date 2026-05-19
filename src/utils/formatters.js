@@ -43,3 +43,28 @@ export const formatPhone = (phone) => {
   }
   return phone;
 };
+
+// Medical Record Formatters
+export const formatBloodPressure = (systolic, diastolic) => {
+  if (!systolic || !diastolic) return 'N/A';
+  return `${systolic}/${diastolic} mmHg`;
+};
+
+export const formatTemperature = (temp) => {
+  if (!temp) return 'N/A';
+  return `${temp}°C`;
+};
+
+export const formatVitalSign = (value, unit = '') => {
+  if (!value) return 'N/A';
+  return unit ? `${value} ${unit}` : value;
+};
+
+export const calculateTotalFees = (consultation = 0, lab = 0, medication = 0, other = 0) => {
+  return parseFloat(consultation || 0) + parseFloat(lab || 0) + parseFloat(medication || 0) + parseFloat(other || 0);
+};
+
+export const formatCurrency = (amount) => {
+  if (!amount) return 'K0.00';
+  return `K${parseFloat(amount).toFixed(2)}`;
+};

@@ -23,6 +23,7 @@ export const AuthProvider = ({ children }) => {
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
           role,
+          patientId: firebaseUser.uid, // If user is patient, their uid is their patientId
         });
         setUserRole(role);
       } else {
@@ -43,6 +44,7 @@ export const AuthProvider = ({ children }) => {
     isDoctor: userRole === 'doctor',
     isReceptionist: userRole === 'receptionist',
     isNurse: userRole === 'nurse',
+    isPatient: userRole === 'patient',
     isMedicalStaff: userRole === 'doctor' || userRole === 'nurse',
     loading,
   };
