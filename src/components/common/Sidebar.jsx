@@ -83,8 +83,8 @@ const Sidebar = () => {
       {/* Logo */}
       <div className="p-6 border-b border-venus-border">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-venus-primary-500 rounded-lg flex items-center justify-center shadow-glow">
-            <Activity className="w-6 h-6 text-white" />
+          <div className="w-10 h-10 rounded-lg flex items-center justify-center shadow-glow logo-bg">
+            <Activity className="w-6 h-6 logo-icon" />
           </div>
           <div>
             <h1 className="text-xl font-bold text-venus-text-primary">Venus</h1>

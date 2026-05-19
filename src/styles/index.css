@@ -176,26 +176,13 @@
   .btn-danger:hover {
     background-color: rgba(220, 38, 38, 0.2);
   }
+
+  .logo-bg {
+    background-color: #0EA5E9 !important;
+    color: white;
+  }
+
+  .logo-icon {
+    color: white !important;
+  }
 }
-
-  .btn-secondary:hover {
-    background-color: var(--venus-bg-elevated);
-  }
-
-  .btn-danger {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-    background-color: rgba(220, 38, 38, 0.1);
-    color: var(--venus-danger);
-    font-weight: 500;
-    border-radius: 0.5rem;
-    border: 1px solid rgba(220, 38, 38, 0.3);
-    transition: all 0.2s;
-    cursor: pointer;
-  }
-
-  .btn-danger:hover {
-    background-color: rgba(220, 38, 38, 0.2);
-  }

@@ -42,8 +42,8 @@ const Login = () => {
     <div className="w-full">
       {/* Logo */}
       <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-venus-primary-500 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-glow">
-          <Activity className="w-10 h-10 text-white" />
+        <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-glow logo-bg">
+          <Activity className="w-10 h-10 logo-icon" />
         </div>
         <h1 className="text-2xl font-bold text-venus-text-primary">Welcome Back</h1>
         <p className="text-venus-text-muted mt-1">Sign in to Venus Clinic System</p>
