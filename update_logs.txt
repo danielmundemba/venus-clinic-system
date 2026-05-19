@@ -1,4 +1,13 @@
 =======================================================================================================
+========================== Code Update 19.05.26 - Daniel Mundemba =====================================
+
+Appointments
+1. Implementation of Appointments for patients
+2. Assigning of doctors 
+3. Waiting for user management to proparly pick how doctors are searched for 
+4. Current Appointments are incomplete data as is relying on part still being belt
+
+=======================================================================================================
 ========================== Code Update 19.05.26 - Remmy Malasha =======================================
 
 Medical Records Module Implementation

@@ -9,6 +9,7 @@ import UnifiedDashboard from './pages/dashboard/UnifiedDashboard';
 import PatientList from './pages/patients/PatientList';
 import PatientDetails from './pages/patients/PatientDetails';
 import WalkInRegistration from './pages/appointments/WalkInRegistration';
+import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import AuditLogs from './pages/admin/Auditlogs';
 import MedicalRecordsList from './pages/medical-records/MedicalRecordsList';
 import CreateMedicalRecord from './pages/medical-records/CreateMedicalRecord';
@@ -23,6 +24,7 @@ const PlaceholderPage = ({ title }) => (
 );
 
 const AppointmentSchedule = () => <PlaceholderPage title="Appointments" />;
+const MedicalRecords = () => <PlaceholderPage title="Medical Records" />;
 const Invoices = () => <PlaceholderPage title="Billing & Invoices" />;
 const UserManagement = () => <PlaceholderPage title="User Management" />;
 
@@ -50,7 +52,7 @@ function App() {
               <Route path="/patients/:id" element={<PatientDetails />} />
               
               {/* Appointment Routes */}
-              <Route path="/appointments" element={<AppointmentSchedule />} />
+              <Route path="/appointments" element={<AppointmentsPage />} />
               <Route path="/appointments/walk-in" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist', 'doctor', 'nurse']}>
                   <WalkInRegistration />

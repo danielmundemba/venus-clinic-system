@@ -1,3 +1,4 @@
+import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { 
   Users, 
@@ -6,17 +7,19 @@ import {
   TrendingUp,
   Clock,
   AlertCircle,
-  Activity
+  Activity,
+  ChevronRight
 } from 'lucide-react';
+import DoctorQueue from '../../components/appointments/DoctorQueue';
 
 // Widget components
 const StatCard = ({ title, value, icon: Icon, trend, color }) => (
-  <div className="card hover:bg-venus-bg-elevated transition-all duration-200">
+  <div className="bg-venus-bg-secondary border border-venus-border rounded-xl p-5 hover:bg-venus-bg-elevated transition-all duration-200">
     <div className="flex items-start justify-between">
       <div>
         <p className="text-sm text-venus-text-muted mb-1">{title}</p>
         <h3 className="text-2xl font-bold text-venus-text-primary">{value}</h3>
-        {trend && (
+        {trend !== undefined && (
           <p className={`text-sm mt-2 flex items-center gap-1 ${trend >= 0 ? 'text-venus-success' : 'text-venus-danger'}`}>
             <TrendingUp className="w-4 h-4" />
             {trend > 0 ? '+' : ''}{trend}% from last week
@@ -51,7 +54,7 @@ const UnifiedDashboard = () => {
       { title: 'Pending Records', value: '15', icon: FileText, trend: -3, color: 'bg-venus-warning/20 text-venus-warning' },
       { title: 'Revenue Today', value: 'K 12,450', icon: TrendingUp, trend: 8, color: 'bg-venus-info/20 text-venus-info' },
     ];
-    
+
     if (isDoctor) return [
       { title: 'My Patients Today', value: '12', icon: Users, color: 'bg-venus-primary-500/20 text-venus-primary-400' },
       { title: 'Pending Diagnoses', value: '5', icon: FileText, color: 'bg-venus-warning/20 text-venus-warning' },
@@ -76,21 +79,21 @@ const UnifiedDashboard = () => {
 
   const getQuickActions = () => {
     const actions = [];
-    
+
     if (isAdmin || isReceptionist) {
       actions.push(
-        { icon: Users, label: 'Register New Patient', onClick: () => {} },
-        { icon: CalendarCheck, label: 'Schedule Appointment', onClick: () => {} },
+        { icon: Users, label: 'Register New Patient', onClick: () => window.location.href = '/patients/register' },
+        { icon: CalendarCheck, label: 'Schedule Appointment', onClick: () => window.location.href = '/appointments' },
       );
     }
-    
+
     if (isDoctor || isNurse) {
       actions.push(
-        { icon: FileText, label: 'Create Medical Record', onClick: () => {} },
-        { icon: Users, label: 'View Patient Queue', onClick: () => {} },
+        { icon: FileText, label: 'Create Medical Record', onClick: () => window.location.href = '/patients' },
+        { icon: Users, label: 'View Patient Queue', onClick: () => window.location.href = '/appointments' },
       );
     }
-    
+
     if (isAdmin || isReceptionist) {
       actions.push(
         { icon: TrendingUp, label: 'Create Invoice', onClick: () => {} },
@@ -122,19 +125,55 @@ const UnifiedDashboard = () => {
         ))}
       </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h2 className="text-lg font-semibold text-venus-text-primary mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {quickActions.map((action, index) => (
-            <QuickAction key={index} {...action} />
-          ))}
+      {/* Doctor/Nurse Queue Widget */}
+      {(isDoctor || isNurse) && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <DoctorQueue
+              compact={false}
+              onStartConsultation={(appointmentId) => {
+                window.location.href = `/appointments?action=consult& id=${appointmentId}`;
+              }}
+              onViewRecord={(patientId) => {
+                window.location.href = `/patients/${patientId}`;
+              }}
+              onViewAll={() => {
+                window.location.href = '/appointments';
+              }}
+            />
+          </div>
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-venus-text-primary">Quick Actions</h2>
+            <div className="space-y-2">
+              {quickActions.map((action, index) => (
+                <QuickAction key={index} {...action} />
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Admin/Receptionist Quick Actions */}
+      {(isAdmin || isReceptionist) && (
+        <div>
+          <h2 className="text-lg font-semibold text-venus-text-primary mb-4">Quick Actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {quickActions.map((action, index) => (
+              <QuickAction key={index} {...action} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Recent Activity (placeholder for now) */}
-      <div className="card">
-        <h2 className="text-lg font-semibold text-venus-text-primary mb-4">Recent Activity</h2>
+      <div className="bg-venus-bg-secondary border border-venus-border rounded-xl p-5">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-venus-text-primary">Recent Activity</h2>
+          <button className="text-sm text-venus-primary-400 hover:text-venus-primary-300 flex items-center gap-1 transition-colors">
+            View All
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="flex items-center gap-4 p-3 bg-venus-bg-tertiary rounded-lg">
