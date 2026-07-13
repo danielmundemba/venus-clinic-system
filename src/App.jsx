@@ -14,6 +14,7 @@ import AuditLogs from './pages/admin/Auditlogs';
 import MedicalRecordsList from './pages/medical-records/MedicalRecordsList';
 import CreateMedicalRecord from './pages/medical-records/CreateMedicalRecord';
 import MedicalRecordDetails from './pages/medical-records/MedicalRecordDetails';
+import UserManagement from './pages/admin/UserManagement';
 
 // Placeholder pages
 const PlaceholderPage = ({ title }) => (
@@ -26,7 +27,7 @@ const PlaceholderPage = ({ title }) => (
 const AppointmentSchedule = () => <PlaceholderPage title="Appointments" />;
 const MedicalRecords = () => <PlaceholderPage title="Medical Records" />;
 const Invoices = () => <PlaceholderPage title="Billing & Invoices" />;
-const UserManagement = () => <PlaceholderPage title="User Management" />;
+
 
 function App() {
   return (
