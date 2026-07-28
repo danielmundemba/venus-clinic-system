@@ -8,23 +8,12 @@ import Login from './pages/auth/Login';
 import UnifiedDashboard from './pages/dashboard/UnifiedDashboard';
 import PatientList from './pages/patients/PatientList';
 import PatientDetails from './pages/patients/PatientDetails';
-import WalkInRegistration from './pages/appointments/WalkInRegistration';
 import AppointmentsPage from './pages/appointments/AppointmentsPage';
 import AuditLogs from './pages/admin/Auditlogs';
 import MedicalRecordsList from './pages/medical-records/MedicalRecordsList';
 import CreateMedicalRecord from './pages/medical-records/CreateMedicalRecord';
 import MedicalRecordDetails from './pages/medical-records/MedicalRecordDetails';
 import UserManagement from './pages/admin/UserManagement';
-
-// Placeholder pages
-const PlaceholderPage = ({ title }) => (
-  <div className="card">
-    <h1 className="text-xl font-bold text-venus-text-primary">{title}</h1>
-    <p className="text-venus-text-muted mt-2">This page is under construction.</p>
-  </div>
-);
-
-const Invoices = () => <PlaceholderPage title="Billing & Invoices" />;
 
 function App() {
   return (
@@ -49,14 +38,6 @@ function App() {
               <Route path="/patients" element={<PatientList />} />
               <Route path="/patients/:id" element={<PatientDetails />} />
 
-              {/* Appointment Routes */}
-              <Route path="/appointments" element={<AppointmentsPage />} />
-              <Route path="/appointments/walk-in" element={
-                <ProtectedRoute allowedRoles={['admin', 'receptionist', 'doctor', 'nurse']}>
-                  <WalkInRegistration />
-                </ProtectedRoute>
-              } />
-
               {/* Medical Records Routes */}
               <Route path="/medical-records" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']}>
@@ -71,13 +52,6 @@ function App() {
               <Route path="/medical-records/:patientId/:recordId" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']}>
                   <MedicalRecordDetails />
-                </ProtectedRoute>
-              } />
-
-              {/* Billing Route */}
-              <Route path="/billing" element={
-                <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
-                  <Invoices />
                 </ProtectedRoute>
               } />
 

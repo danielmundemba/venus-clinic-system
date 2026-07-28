@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
-import { getPatientInfo } from '../../firebase/db';
+import { useAuth } from '../../context/AuthContext';
+import { getPatientInfo, getPatientMedicalRecords, getActivePatientRecord, createMedicalRecord } from '../../firebase/db';
 import { formatDate, calculateAge, formatPhone } from '../../utils/formatters';
 import { 
   ArrowLeft, 
@@ -20,18 +21,24 @@ import {
   XCircle,
   Contact,
   Stethoscope,
-  Pill
+  Pill,
+  Eye
 } from 'lucide-react';
 
 const PatientDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user, userRole } = useAuth();
   const [patient, setPatient] = useState(null);
   const [patientInfo, setPatientInfo] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [pastRecords, setPastRecords] = useState([]);
+  const [loadingRecords, setLoadingRecords] = useState(true);
+  const [startingVisit, setStartingVisit] = useState(false);
 
   useEffect(() => {
     loadPatient();
+    loadPastRecords();
   }, [id]);
 
   const loadPatient = async () => {
@@ -55,6 +62,44 @@ const PatientDetails = () => {
       navigate('/patients');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPastRecords = async () => {
+    setLoadingRecords(true);
+    try {
+      const records = await getPatientMedicalRecords(id, 'completed');
+      setPastRecords(records);
+    } catch (error) {
+      console.error('Failed to load past medical records:', error);
+    } finally {
+      setLoadingRecords(false);
+    }
+  };
+
+  const canCreateVisit = () => ['admin', 'receptionist'].includes(userRole);
+
+  const handleCreateVisit = async () => {
+    setStartingVisit(true);
+    try {
+      // If the patient already has a visit in progress, jump into that
+      // instead of starting a second one.
+      const active = await getActivePatientRecord(id);
+      if (active) {
+        navigate(`/medical-records/${id}/${active.id}`);
+        return;
+      }
+
+      const result = await createMedicalRecord(id, {
+        notes: '',
+        checkedInBy: user?.displayName || user?.email,
+      });
+      navigate(`/medical-records/${id}/${result.id}`);
+    } catch (error) {
+      console.error('Failed to start visit:', error);
+      alert('Failed to start visit: ' + error.message);
+    } finally {
+      setStartingVisit(false);
     }
   };
 
@@ -300,12 +345,53 @@ const PatientDetails = () => {
         </div>
       )}
 
+      {/* Past Medical Records */}
+      <div className="card">
+        <h3 className="text-lg font-semibold text-venus-text-primary mb-4 flex items-center gap-2">
+          <FileText className="w-5 h-5 text-violet-400" />
+          Past Medical Records
+        </h3>
+        {loadingRecords ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="w-6 h-6 text-venus-primary-400 animate-spin" />
+          </div>
+        ) : pastRecords.length === 0 ? (
+          <p className="text-venus-text-muted text-sm italic">No completed visits yet</p>
+        ) : (
+          <div className="space-y-2">
+            {pastRecords.map(record => (
+              <div key={record.id}
+                className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 text-sm text-venus-text-primary font-medium">
+                    <Calendar className="w-3.5 h-3.5 text-venus-text-muted" />
+                    {record.visitDate}
+                    <span className="text-venus-text-muted font-normal">• {record.visitTime}</span>
+                  </div>
+                  {record.doctor?.diagnosis && (
+                    <p className="text-xs text-venus-text-muted mt-1 truncate">{record.doctor.diagnosis}</p>
+                  )}
+                </div>
+                <button onClick={() => navigate(`/medical-records/${id}/${record.id}`)}
+                  className="p-2 text-venus-text-muted hover:text-venus-primary-400 hover:bg-venus-primary-500/10 rounded-lg transition-colors flex-shrink-0"
+                  title="View Record">
+                  <Eye className="w-5 h-5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-4">
-        <button className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm">
-          <FileText className="w-5 h-5" />
-          Create Medical Record
-        </button>
+        {canCreateVisit() && (
+          <button onClick={handleCreateVisit} disabled={startingVisit}
+            className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-60">
+            {startingVisit ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+            Create Medical Record
+          </button>
+        )}
         <button className="flex items-center gap-2 px-4 py-2.5 border border-venus-border text-venus-text-primary rounded-lg text-sm font-medium hover:bg-venus-bg-elevated transition-all">
           <Calendar className="w-5 h-5" />
           Schedule Appointment

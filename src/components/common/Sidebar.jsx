@@ -38,22 +38,10 @@ const Sidebar = () => {
       roles: ['admin', 'doctor', 'receptionist', 'nurse']
     },
     { 
-      path: '/appointments/walk-in', 
-      label: 'Walk-in', 
-      icon: UserPlus,
-      roles: ['admin', 'receptionist', 'doctor', 'nurse']
-    },
-    { 
       path: '/medical-records', 
       label: 'Medical Records', 
       icon: ClipboardList,
       roles: ['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']
-    },
-    { 
-      path: '/billing', 
-      label: 'Billing', 
-      icon: Receipt,
-      roles: ['admin', 'receptionist']
     },
     { 
       path: '/admin/users', 

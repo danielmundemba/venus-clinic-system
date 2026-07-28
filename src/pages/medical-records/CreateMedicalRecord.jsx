@@ -1,12 +1,15 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { createMedicalRecord } from '../../firebase/db';
 import { useAuth } from '../../context/AuthContext';
 import SearchBar from '../../components/common/SearchBar';
 import { formatDate } from '../../utils/formatters';
+import { SERVICE_CATALOG, sumServices } from '../../data/serviceCatalog';
 import { 
   ClipboardList, 
   User, 
@@ -26,9 +29,14 @@ const visitSchema = z.object({
 const CreateMedicalRecord = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const preselectedPatientId = searchParams.get('patientId');
+
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [loadingPatient, setLoadingPatient] = useState(!!preselectedPatientId);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [tickedServices, setTickedServices] = useState([]);
 
   const {
     register,
@@ -39,8 +47,29 @@ const CreateMedicalRecord = () => {
     resolver: zodResolver(visitSchema),
   });
 
+  // Coming from Patient Details "Create Medical Record" — skip the search
+  // step and load that patient directly.
+  useEffect(() => {
+    if (!preselectedPatientId) return;
+    (async () => {
+      const patientDoc = await getDoc(doc(db, 'users', preselectedPatientId));
+      if (patientDoc.exists()) {
+        setSelectedPatient({ id: patientDoc.id, ...patientDoc.data() });
+      }
+      setLoadingPatient(false);
+    })();
+  }, [preselectedPatientId]);
+
   const handlePatientSelect = (patient) => {
     setSelectedPatient(patient);
+  };
+
+  const toggleService = (service) => {
+    setTickedServices((prev) =>
+      prev.some((s) => s.id === service.id)
+        ? prev.filter((s) => s.id !== service.id)
+        : [...prev, service]
+    );
   };
 
   const onSubmit = async (data) => {
@@ -56,12 +85,14 @@ const CreateMedicalRecord = () => {
         visitDate: formatDate(now),
         visitTime: now.toTimeString().slice(0, 5),
         notes: data.notes || '',
+        services: tickedServices,
         checkedInBy: user?.displayName || user?.email,
       });
 
       setSuccess(true);
       reset();
       setSelectedPatient(null);
+      setTickedServices([]);
 
       setTimeout(() => {
         navigate(`/medical-records/${selectedPatient.id}/${result.id}`);
@@ -104,7 +135,11 @@ const CreateMedicalRecord = () => {
           Select Patient
         </h3>
 
-        {!selectedPatient ? (
+        {loadingPatient ? (
+          <div className="flex items-center gap-2 text-venus-text-muted">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading patient...
+          </div>
+        ) : !selectedPatient ? (
           <SearchBar onSelect={handlePatientSelect} placeholder="Search by name, phone, or email..." />
         ) : (
           <div className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-4">
@@ -117,8 +152,10 @@ const CreateMedicalRecord = () => {
                 <p className="text-sm text-venus-text-muted">{selectedPatient.email} • {selectedPatient.phone}</p>
               </div>
             </div>
-            <button onClick={() => setSelectedPatient(null)}
-              className="text-sm text-venus-danger hover:underline">Change</button>
+            {!preselectedPatientId && (
+              <button onClick={() => setSelectedPatient(null)}
+                className="text-sm text-venus-danger hover:underline">Change</button>
+            )}
           </div>
         )}
       </div>
@@ -152,6 +189,29 @@ const CreateMedicalRecord = () => {
             <textarea {...register('notes')} rows={3}
               className="input-field resize-none"
               placeholder="Reason for visit, initial observations, etc." />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Reception Services</label>
+            <div className="flex flex-wrap gap-2">
+              {SERVICE_CATALOG.reception.map((service) => {
+                const checked = tickedServices.some((s) => s.id === service.id);
+                return (
+                  <button type="button" key={service.id} onClick={() => toggleService(service)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm border transition-colors ${
+                      checked
+                        ? 'bg-venus-primary-500/15 border-venus-primary-500/40 text-venus-primary-400'
+                        : 'bg-venus-bg-tertiary border-venus-border text-venus-text-secondary hover:border-venus-primary-500/30'
+                    }`}>
+                    <input type="checkbox" readOnly checked={checked} className="w-4 h-4 pointer-events-none" />
+                    {service.name} — K{service.price}
+                  </button>
+                );
+              })}
+            </div>
+            {tickedServices.length > 0 && (
+              <p className="text-xs text-venus-text-muted mt-2">Reception total: K{sumServices(tickedServices)}</p>
+            )}
           </div>
 
           <button type="submit" disabled={submitting}

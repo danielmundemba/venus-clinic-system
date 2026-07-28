@@ -3,8 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { getMedicalRecord, updateVitals, updateDoctorDiagnosis, updatePharmacy, completeBilling } from '../../firebase/db';
+import { getMedicalRecord, sendToNurse, updateVitals, updateDoctorDiagnosis, updatePharmacy, completeBilling } from '../../firebase/db';
 import { formatDate } from '../../utils/formatters';
+import { DOCTOR_SERVICES, PHARMACY_SERVICES } from '../../constants/services';
 import { 
   ArrowLeft, 
   User, 
@@ -21,9 +22,10 @@ import {
   Save,
   Loader2,
   AlertCircle,
-  FileText,
+  ClipboardList,
   ChevronRight,
-  ClipboardList
+  Minus,
+  Send
 } from 'lucide-react';
 
 const statusConfig = {
@@ -34,6 +36,8 @@ const statusConfig = {
   billing: { label: 'Billing', color: 'bg-orange-500/10 text-orange-500', step: 5 },
   completed: { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-500', step: 6 },
 };
+
+const emptyMedication = { name: '', dosage: '', quantity: '', instructions: '', price: '' };
 
 const MedicalRecordDetails = () => {
   const { patientId, recordId } = useParams();
@@ -49,10 +53,10 @@ const MedicalRecordDetails = () => {
     temperature: '', weight: '', height: '', bloodPressure: '', pulse: '', spo2: '', notes: ''
   });
   const [doctorForm, setDoctorForm] = useState({
-    diagnosis: '', symptoms: '', notesForNextVisit: '', services: []
+    diagnosis: '', symptoms: '', notesForNextVisit: '', selectedServices: [], sendToPharmacy: true
   });
   const [pharmacyForm, setPharmacyForm] = useState({
-    medications: [{ name: '', dosage: '', quantity: '', instructions: '', price: '' }]
+    medications: [{ ...emptyMedication }], selectedServices: []
   });
   const [billingForm, setBillingForm] = useState({
     servicesTotal: 0, medicationsTotal: 0, totalAmount: 0, paid: false, paymentMethod: ''
@@ -92,12 +96,14 @@ const MedicalRecordDetails = () => {
             diagnosis: recordData.doctor.diagnosis || '',
             symptoms: recordData.doctor.symptoms || '',
             notesForNextVisit: recordData.doctor.notesForNextVisit || '',
-            services: recordData.doctor.services || [],
+            selectedServices: recordData.doctor.services || [],
+            sendToPharmacy: recordData.doctor.sendToPharmacy !== false,
           });
         }
         if (recordData.pharmacy) {
           setPharmacyForm({
-            medications: recordData.pharmacy.medications || [{ name: '', dosage: '', quantity: '', instructions: '', price: '' }],
+            medications: recordData.pharmacy.medications?.length ? recordData.pharmacy.medications : [{ ...emptyMedication }],
+            selectedServices: recordData.pharmacy.services || [],
           });
         }
         if (recordData.billing) {
@@ -108,6 +114,9 @@ const MedicalRecordDetails = () => {
             paid: recordData.billing.paid || false,
             paymentMethod: recordData.billing.paymentMethod || '',
           });
+        } else if (recordData.status === 'billing') {
+          // Pre-fill the totals as soon as the visit reaches billing.
+          calculateTotals(recordData);
         }
       } else {
         setError('Medical record not found');
@@ -138,6 +147,20 @@ const MedicalRecordDetails = () => {
     const stageIdx = steps.indexOf(stage);
     return stageIdx < currentIdx;
   };
+  // Pharmacy is skipped when the doctor didn't send the patient there.
+  const isStageSkipped = (stage) => stage === 'pharmacy' && record?.doctor && record.doctor.sendToPharmacy === false;
+
+  const handleSendToNurse = async () => {
+    setSaving(true);
+    try {
+      await sendToNurse(patientId, recordId);
+      await loadData();
+    } catch (err) {
+      alert('Failed to send to nurse: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSaveVitals = async () => {
     setSaving(true);
@@ -154,11 +177,27 @@ const MedicalRecordDetails = () => {
     }
   };
 
+  const toggleDoctorService = (service) => {
+    setDoctorForm(prev => {
+      const exists = prev.selectedServices.some(s => s.id === service.id);
+      return {
+        ...prev,
+        selectedServices: exists
+          ? prev.selectedServices.filter(s => s.id !== service.id)
+          : [...prev.selectedServices, service],
+      };
+    });
+  };
+
   const handleSaveDoctor = async () => {
     setSaving(true);
     try {
       await updateDoctorDiagnosis(patientId, recordId, {
-        ...doctorForm,
+        diagnosis: doctorForm.diagnosis,
+        symptoms: doctorForm.symptoms,
+        notesForNextVisit: doctorForm.notesForNextVisit,
+        services: doctorForm.selectedServices,
+        sendToPharmacy: doctorForm.sendToPharmacy,
         recordedBy: user?.displayName || user?.email,
       });
       await loadData();
@@ -169,11 +208,24 @@ const MedicalRecordDetails = () => {
     }
   };
 
+  const togglePharmacyService = (service) => {
+    setPharmacyForm(prev => {
+      const exists = prev.selectedServices.some(s => s.id === service.id);
+      return {
+        ...prev,
+        selectedServices: exists
+          ? prev.selectedServices.filter(s => s.id !== service.id)
+          : [...prev.selectedServices, service],
+      };
+    });
+  };
+
   const handleSavePharmacy = async () => {
     setSaving(true);
     try {
       await updatePharmacy(patientId, recordId, {
         medications: pharmacyForm.medications.filter(m => m.name.trim()),
+        services: pharmacyForm.selectedServices,
         dispensedBy: user?.displayName || user?.email,
       });
       await loadData();
@@ -202,7 +254,7 @@ const MedicalRecordDetails = () => {
   const addMedication = () => {
     setPharmacyForm(prev => ({
       ...prev,
-      medications: [...prev.medications, { name: '', dosage: '', quantity: '', instructions: '', price: '' }]
+      medications: [...prev.medications, { ...emptyMedication }]
     }));
   };
 
@@ -220,9 +272,16 @@ const MedicalRecordDetails = () => {
     }));
   };
 
-  const calculateTotals = () => {
-    const servicesTotal = doctorForm.services.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
-    const medicationsTotal = pharmacyForm.medications.reduce((sum, m) => sum + (parseFloat(m.price) || 0), 0);
+  // Rolls up every fee ticked at each stage (vitals fee, doctor services,
+  // pharmacy services) plus medication prices into the billing totals.
+  // Pass a record explicitly when calling right after a fresh load, since
+  // component state won't have updated yet.
+  const calculateTotals = (sourceRecord = record) => {
+    const vitalsServicesTotal = (sourceRecord?.vitals?.services || []).reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
+    const doctorServicesTotal = (sourceRecord?.doctor?.services || []).reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
+    const pharmacyServicesTotal = (sourceRecord?.pharmacy?.services || []).reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
+    const medicationsTotal = (sourceRecord?.pharmacy?.medications || []).reduce((sum, m) => sum + (parseFloat(m.price) || 0), 0);
+    const servicesTotal = vitalsServicesTotal + doctorServicesTotal + pharmacyServicesTotal;
     const total = servicesTotal + medicationsTotal;
     setBillingForm(prev => ({ ...prev, servicesTotal, medicationsTotal, totalAmount: total }));
   };
@@ -291,18 +350,20 @@ const MedicalRecordDetails = () => {
           {Object.entries(statusConfig).map(([key, config], idx) => {
             const isComplete = isStageComplete(key);
             const isActive = isStageActive(key);
+            const skipped = isStageSkipped(key);
             return (
               <div key={key} className="flex items-center flex-1">
                 <div className="flex flex-col items-center flex-1">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                    skipped ? 'bg-venus-bg-tertiary text-venus-text-muted border border-dashed border-venus-border' :
                     isComplete ? 'bg-emerald-500 text-white' :
                     isActive ? 'bg-venus-primary-500 text-white' :
                     'bg-venus-bg-tertiary text-venus-text-muted border border-venus-border'
                   }`}>
-                    {isComplete ? <CheckCircle2 className="w-4 h-4" /> : config.step}
+                    {skipped ? <Minus className="w-4 h-4" /> : isComplete ? <CheckCircle2 className="w-4 h-4" /> : config.step}
                   </div>
                   <span className={`text-xs mt-1.5 font-medium ${isActive ? 'text-venus-primary-400' : 'text-venus-text-muted'}`}>
-                    {config.label}
+                    {config.label}{skipped ? ' (skipped)' : ''}
                   </span>
                 </div>
                 {idx < 5 && (
@@ -338,6 +399,13 @@ const MedicalRecordDetails = () => {
                 <p className="text-sm text-venus-text-muted">Notes</p>
                 <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">{record.reception.notes}</p>
               </div>
+            )}
+            {isStageActive('reception') && canEditStage('reception') && (
+              <button onClick={handleSendToNurse} disabled={saving}
+                className="btn-primary flex items-center gap-2 mt-2">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                Send to Nurse
+              </button>
             )}
           </div>
         ) : <p className="text-venus-text-muted text-sm italic">No reception data</p>}
@@ -380,6 +448,7 @@ const MedicalRecordDetails = () => {
               <textarea value={vitalsForm.notes} onChange={(e) => setVitalsForm({...vitalsForm, notes: e.target.value})}
                 rows={2} className="input-field resize-none" placeholder="Any observations..." />
             </div>
+            <p className="text-xs text-venus-text-muted">A vitals check fee is added to billing automatically when you save.</p>
             <button onClick={handleSaveVitals} disabled={saving} className="btn-primary flex items-center gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save Vitals & Send to Doctor
@@ -411,7 +480,14 @@ const MedicalRecordDetails = () => {
         <div className="flex items-center gap-2 mb-4">
           <Stethoscope className="w-5 h-5 text-purple-500" />
           <h3 className="text-lg font-semibold text-venus-text-primary">Doctor / Diagnosis</h3>
-          {isStageComplete('doctor') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
+          <div className="ml-auto flex items-center gap-3">
+            <button onClick={() => navigate(`/patients/${patientId}`)}
+              className="text-sm text-venus-primary-400 hover:underline flex items-center gap-1">
+              <User className="w-4 h-4" />
+              View Patient
+            </button>
+            {isStageComplete('doctor') && <CheckCircle2 className="w-5 h-5 text-emerald-500" />}
+          </div>
         </div>
 
         {isStageActive('doctor') && canEditStage('doctor') ? (
@@ -429,29 +505,27 @@ const MedicalRecordDetails = () => {
             <div>
               <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Services Provided</label>
               <div className="space-y-2">
-                {doctorForm.services.map((service, idx) => (
-                  <div key={idx} className="flex gap-2">
-                    <input value={service.name}
-                      onChange={(e) => {
-                        const newServices = [...doctorForm.services];
-                        newServices[idx] = { ...service, name: e.target.value };
-                        setDoctorForm({...doctorForm, services: newServices});
-                      }}
-                      className="input-field flex-1" placeholder="Service name" />
-                    <input type="number" value={service.price}
-                      onChange={(e) => {
-                        const newServices = [...doctorForm.services];
-                        newServices[idx] = { ...service, price: e.target.value };
-                        setDoctorForm({...doctorForm, services: newServices});
-                      }}
-                      className="input-field w-24" placeholder="Price" />
-                    <button onClick={() => setDoctorForm({...doctorForm, services: doctorForm.services.filter((_, i) => i !== idx)})}
-                      className="text-venus-danger hover:bg-venus-danger/10 px-2 rounded">×</button>
-                  </div>
-                ))}
-                <button onClick={() => setDoctorForm({...doctorForm, services: [...doctorForm.services, { name: '', price: '' }]})}
-                  className="text-sm text-venus-primary-400 hover:underline">+ Add Service</button>
+                {DOCTOR_SERVICES.map(service => {
+                  const checked = doctorForm.selectedServices.some(s => s.id === service.id);
+                  return (
+                    <label key={service.id}
+                      className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-2.5 cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <input type="checkbox" checked={checked} onChange={() => toggleDoctorService(service)}
+                          className="w-4 h-4 rounded border-venus-border" />
+                        <span className="text-sm text-venus-text-primary">{service.name}</span>
+                      </span>
+                      <span className="text-sm text-venus-text-secondary">K{service.price}</span>
+                    </label>
+                  );
+                })}
               </div>
+            </div>
+            <div className="flex items-center gap-2 bg-venus-bg-tertiary rounded-lg p-3">
+              <input type="checkbox" checked={doctorForm.sendToPharmacy}
+                onChange={(e) => setDoctorForm({...doctorForm, sendToPharmacy: e.target.checked})}
+                className="w-4 h-4 rounded border-venus-border" />
+              <label className="text-sm text-venus-text-secondary">Send to Pharmacy (patient needs medication dispensed)</label>
             </div>
             <div>
               <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Notes for Next Visit</label>
@@ -460,7 +534,7 @@ const MedicalRecordDetails = () => {
             </div>
             <button onClick={handleSaveDoctor} disabled={saving} className="btn-primary flex items-center gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              Save Diagnosis & Send to Pharmacy
+              Save Diagnosis & {doctorForm.sendToPharmacy ? 'Send to Pharmacy' : 'Send to Billing'}
             </button>
           </div>
         ) : record?.doctor ? (
@@ -502,10 +576,15 @@ const MedicalRecordDetails = () => {
         <div className="flex items-center gap-2 mb-4">
           <Pill className="w-5 h-5 text-green-500" />
           <h3 className="text-lg font-semibold text-venus-text-primary">Pharmacy</h3>
-          {isStageComplete('pharmacy') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
+          {isStageComplete('pharmacy') && !isStageSkipped('pharmacy') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
         </div>
 
-        {isStageActive('pharmacy') && canEditStage('pharmacy') ? (
+        {isStageSkipped('pharmacy') ? (
+          <p className="text-venus-text-muted text-sm italic flex items-center gap-2">
+            <Minus className="w-4 h-4" />
+            Skipped — the doctor marked this visit as not requiring medication.
+          </p>
+        ) : isStageActive('pharmacy') && canEditStage('pharmacy') ? (
           <div className="space-y-4">
             {pharmacyForm.medications.map((med, idx) => (
               <div key={idx} className="border border-venus-border rounded-lg p-4 space-y-3">
@@ -530,6 +609,27 @@ const MedicalRecordDetails = () => {
               </div>
             ))}
             <button onClick={addMedication} className="text-sm text-venus-primary-400 hover:underline">+ Add Medication</button>
+
+            <div>
+              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Pharmacy Services</label>
+              <div className="space-y-2">
+                {PHARMACY_SERVICES.map(service => {
+                  const checked = pharmacyForm.selectedServices.some(s => s.id === service.id);
+                  return (
+                    <label key={service.id}
+                      className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-2.5 cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <input type="checkbox" checked={checked} onChange={() => togglePharmacyService(service)}
+                          className="w-4 h-4 rounded border-venus-border" />
+                        <span className="text-sm text-venus-text-primary">{service.name}</span>
+                      </span>
+                      <span className="text-sm text-venus-text-secondary">K{service.price}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             <button onClick={handleSavePharmacy} disabled={saving} className="btn-primary flex items-center gap-2">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               Save & Send to Billing
@@ -547,6 +647,16 @@ const MedicalRecordDetails = () => {
                 <p className="text-sm text-venus-text-secondary mt-1">{med.instructions}</p>
               </div>
             ))}
+            {record.pharmacy.services?.length > 0 && (
+              <div className="space-y-1">
+                {record.pharmacy.services.map((s, i) => (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span className="text-venus-text-primary">{s.name}</span>
+                    <span className="text-venus-text-secondary">K{s.price}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="text-xs text-venus-text-muted">Dispensed by {record.pharmacy.dispensedBy}</p>
           </div>
         ) : <p className="text-venus-text-muted text-sm italic">Waiting for pharmacy...</p>}
@@ -576,7 +686,7 @@ const MedicalRecordDetails = () => {
                 <span className="text-venus-primary-400">K{billingForm.totalAmount}</span>
               </div>
             </div>
-            <button onClick={calculateTotals} className="text-sm text-venus-primary-400 hover:underline">Recalculate Totals</button>
+            <button onClick={() => calculateTotals()} className="text-sm text-venus-primary-400 hover:underline">Recalculate Totals</button>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Payment Method</label>

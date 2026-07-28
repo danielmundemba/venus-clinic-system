@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { loginUser } from '../../firebase/auth';
+import { useAuth } from '../../context/AuthContext';
+import { getAuthErrorMessage } from '../../utils/authErrors';
 import { Activity, Eye, EyeOff } from 'lucide-react';
 
 const loginSchema = z.object({
@@ -13,9 +15,10 @@ const loginSchema = z.object({
 
 const Login = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const {
     register,
@@ -25,16 +28,25 @@ const Login = () => {
     resolver: zodResolver(loginSchema),
   });
 
+  // Redirect reactively once AuthContext confirms the user + role are resolved.
+  // Do NOT navigate() from onSubmit — it races onAuthStateChanged/getUserRole.
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
   const onSubmit = async (data) => {
-    setLoading(true);
+    setSubmitting(true);
     setError('');
     try {
       await loginUser(data.email, data.password);
-      navigate('/dashboard');
+      // No navigate() here — the useEffect above fires once
+      // AuthContext's `loading` flips to false with the resolved role.
     } catch (err) {
-      setError(err.message || 'Invalid credentials');
+      setError(getAuthErrorMessage(err.code));
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -98,10 +110,10 @@ const Login = () => {
 
         <button
           type="submit"
-          disabled={loading}
+          disabled={submitting}
           className="w-full btn-primary py-3"
         >
-          {loading ? 'Signing in...' : 'Sign In'}
+          {submitting ? 'Signing in...' : 'Sign In'}
         </button>
       </form>
 

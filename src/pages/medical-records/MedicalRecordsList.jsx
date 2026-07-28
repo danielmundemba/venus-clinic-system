@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, query, where, orderBy, getDocs, collectionGroup, doc, getDoc } from 'firebase/firestore';
+import { collectionGroup, query, where, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { formatDate } from '../../utils/formatters';
+import { getRecentlyCompletedRecords } from '../../firebase/db';
 import { 
   ClipboardList, 
   Eye, 
@@ -48,31 +48,31 @@ const MedicalRecordsList = () => {
     setIndexUrl(null);
 
     try {
-      let recordsQuery;
+      let recordsData;
 
-      if (statusFilter === 'all') {
-        recordsQuery = query(
-          collectionGroup(db, 'MedicalRecords'),
-          where('status', 'in', ['reception', 'nurse', 'doctor', 'pharmacy', 'billing']),
-          orderBy('createdAt', 'desc')
-        );
+      if (statusFilter === 'completed') {
+        // Completed tab only shows visits closed in the last 24 hours.
+        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        recordsData = await getRecentlyCompletedRecords(since);
       } else {
-        recordsQuery = query(
-          collectionGroup(db, 'MedicalRecords'),
-          where('status', '==', statusFilter),
-          orderBy('createdAt', 'desc')
-        );
-      }
+        const recordsQuery = statusFilter === 'all'
+          ? query(
+              collectionGroup(db, 'MedicalRecords'),
+              where('status', 'in', ['reception', 'nurse', 'doctor', 'pharmacy', 'billing']),
+              orderBy('createdAt', 'desc')
+            )
+          : query(
+              collectionGroup(db, 'MedicalRecords'),
+              where('status', '==', statusFilter),
+              orderBy('createdAt', 'desc')
+            );
 
-      const snapshot = await getDocs(recordsQuery);
-      const recordsData = snapshot.docs.map(doc => {
-        const pathParts = doc.ref.path.split('/');
-        return { 
-          id: doc.id, 
-          patientId: pathParts[1],
-          ...doc.data() 
-        };
-      });
+        const snapshot = await getDocs(recordsQuery);
+        recordsData = snapshot.docs.map(d => {
+          const pathParts = d.ref.path.split('/');
+          return { id: d.id, patientId: pathParts[1], ...d.data() };
+        });
+      }
 
       // Fetch patient names
       const patientIds = [...new Set(recordsData.map(r => r.patientId))];
@@ -98,7 +98,7 @@ const MedicalRecordsList = () => {
       console.error('Failed to load medical records:', error);
 
       if (error.message && error.message.includes('index')) {
-        setError('Firestore index required for collection group query.');
+        setError('Firestore index required for this query.');
         setIndexUrl('https://console.firebase.google.com/project/venus-clinic-system/firestore/indexes');
       } else {
         setError(`Failed to load records: ${error.message}`);
@@ -162,7 +162,7 @@ const MedicalRecordsList = () => {
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 statusFilter === key ? 'bg-venus-primary-500 text-white' : 'bg-venus-bg-tertiary text-venus-text-secondary hover:bg-venus-primary-500/10'
               }`}>
-              {config.label}
+              {config.label}{key === 'completed' ? ' (24h)' : ''}
             </button>
           ))}
         </div>
@@ -187,7 +187,7 @@ const MedicalRecordsList = () => {
                 </td></tr>
               ) : records.length === 0 ? (
                 <tr><td colSpan="5" className="px-6 py-12 text-center text-venus-text-muted">
-                  No active medical records found
+                  {statusFilter === 'completed' ? 'No visits completed in the last 24 hours' : 'No active medical records found'}
                 </td></tr>
               ) : (
                 records.map((record) => {

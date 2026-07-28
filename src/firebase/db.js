@@ -12,9 +12,11 @@ import {
   limit,
   serverTimestamp,
   writeBatch,
-  collectionGroup
+  collectionGroup,
+  Timestamp
 } from 'firebase/firestore';
 import { db } from './config';
+import { NURSE_AUTO_SERVICE } from '../constants/services';
 
 // ============================================
 // GENERIC CRUD
@@ -157,6 +159,24 @@ export const createMedicalRecord = async (patientId, receptionData) => {
   return { id: docRef.id, ...recordData };
 };
 
+// Returns any medical record for this patient that hasn't reached 'completed' yet.
+// Used to avoid creating a second active visit for the same patient.
+export const getActivePatientRecord = async (patientId) => {
+  const medicalRecordsRef = collection(db, 'users', patientId, 'MedicalRecords');
+  const q = query(
+    medicalRecordsRef,
+    where('status', 'in', ['reception', 'nurse', 'doctor', 'pharmacy', 'billing']),
+    orderBy('createdAt', 'desc'),
+    limit(1)
+  );
+  const snapshot = await getDocs(q);
+  if (!snapshot.empty) {
+    const d = snapshot.docs[0];
+    return { id: d.id, ...d.data() };
+  }
+  return null;
+};
+
 export const getPatientMedicalRecords = async (patientId, statusFilter = null) => {
   const medicalRecordsRef = collection(db, 'users', patientId, 'MedicalRecords');
   let constraints = [orderBy('createdAt', 'desc')];
@@ -179,6 +199,17 @@ export const getMedicalRecord = async (patientId, recordId) => {
   return null;
 };
 
+// Receptionist explicitly hands the checked-in patient off to the nurse.
+// No data payload — reception info was already saved at creation time in
+// createMedicalRecord; this only advances the workflow status.
+export const sendToNurse = async (patientId, recordId) => {
+  const docRef = doc(db, 'users', patientId, 'MedicalRecords', recordId);
+  await updateDoc(docRef, {
+    status: 'nurse',
+    updatedAt: serverTimestamp(),
+  });
+};
+
 export const updateVitals = async (patientId, recordId, vitalsData) => {
   const docRef = doc(db, 'users', patientId, 'MedicalRecords', recordId);
   await updateDoc(docRef, {
@@ -191,6 +222,8 @@ export const updateVitals = async (patientId, recordId, vitalsData) => {
       pulse: vitalsData.pulse,
       spo2: vitalsData.spo2,
       notes: vitalsData.notes || '',
+      // Vitals check fee is added automatically — nurse doesn't tick anything.
+      services: [NURSE_AUTO_SERVICE],
       recordedBy: vitalsData.recordedBy,
       recordedAt: serverTimestamp(),
     },
@@ -198,15 +231,20 @@ export const updateVitals = async (patientId, recordId, vitalsData) => {
   });
 };
 
+// doctorData.sendToPharmacy (bool) decides whether the visit routes through
+// the pharmacy stage or skips straight to billing.
 export const updateDoctorDiagnosis = async (patientId, recordId, doctorData) => {
   const docRef = doc(db, 'users', patientId, 'MedicalRecords', recordId);
+  const sendToPharmacy = doctorData.sendToPharmacy !== false;
+
   await updateDoc(docRef, {
-    status: 'pharmacy',
+    status: sendToPharmacy ? 'pharmacy' : 'billing',
     doctor: {
       diagnosis: doctorData.diagnosis,
       symptoms: doctorData.symptoms || '',
       notesForNextVisit: doctorData.notesForNextVisit || '',
       services: doctorData.services || [],
+      sendToPharmacy,
       recordedBy: doctorData.recordedBy,
       recordedAt: serverTimestamp(),
     },
@@ -220,6 +258,7 @@ export const updatePharmacy = async (patientId, recordId, pharmacyData) => {
     status: 'billing',
     pharmacy: {
       medications: pharmacyData.medications || [],
+      services: pharmacyData.services || [],
       dispensedBy: pharmacyData.dispensedBy,
       dispensedAt: serverTimestamp(),
     },
@@ -248,6 +287,28 @@ export const getActiveMedicalRecords = async (statusFilter = null) => {
   const recordsQuery = statusFilter 
     ? query(collectionGroup(db, 'MedicalRecords'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'))
     : query(collectionGroup(db, 'MedicalRecords'), where('status', 'in', ['reception', 'nurse', 'doctor', 'pharmacy', 'billing']), orderBy('createdAt', 'desc'));
+
+  const snapshot = await getDocs(recordsQuery);
+  return snapshot.docs.map(doc => {
+    const path = doc.ref.path.split('/');
+    return { 
+      id: doc.id, 
+      patientId: path[1],
+      ...doc.data() 
+    };
+  });
+};
+
+// Completed records from the last 24 hours only (for the "Completed" filter tab).
+export const getRecentlyCompletedRecords = async (sinceDate) => {
+  const cutoff = Timestamp.fromDate(sinceDate);
+
+  const recordsQuery = query(
+    collectionGroup(db, 'MedicalRecords'),
+    where('status', '==', 'completed'),
+    where('updatedAt', '>=', cutoff),
+    orderBy('updatedAt', 'desc')
+  );
 
   const snapshot = await getDocs(recordsQuery);
   return snapshot.docs.map(doc => {

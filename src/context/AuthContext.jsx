@@ -16,21 +16,28 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const unsubscribe = onAuthChange(async (firebaseUser) => {
-      if (firebaseUser) {
-        const role = await getUserRole(firebaseUser.uid);
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          role,
-          patientId: firebaseUser.uid, // If user is patient, their uid is their patientId
-        });
-        setUserRole(role);
-      } else {
+      try {
+        if (firebaseUser) {
+          const role = await getUserRole(firebaseUser.uid);
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            role,
+            patientId: firebaseUser.uid, // If user is patient, their uid is their patientId
+          });
+          setUserRole(role);
+        } else {
+          setUser(null);
+          setUserRole(null);
+        }
+      } catch (err) {
+        console.error('Auth state resolution failed:', err);
         setUser(null);
         setUserRole(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
@@ -51,7 +58,13 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {loading ? (
+        <div className="min-h-screen bg-venus-bg-primary flex items-center justify-center">
+          <div className="w-10 h-10 border-4 border-venus-border border-t-venus-primary rounded-full animate-spin" />
+        </div>
+      ) : (
+        children
+      )}
     </AuthContext.Provider>
   );
 };
