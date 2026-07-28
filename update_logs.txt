@@ -1,4 +1,12 @@
 =======================================================================================================
+========================== Code Update 28.07.26 - Daniel Mundemba =====================================
+Main Working Changes
+1. Patient Creation creates a user also
+2. An Admin can now create a staff which creates as a patient and an account
+3. All created users can login
+4. The architecture was changed. All users are under users collection, recognized by role, and two booleans isStaff & isPatient
+
+=======================================================================================================
 ========================== Code Update 19.05.26 - Daniel Mundemba =====================================
 
 Appointments

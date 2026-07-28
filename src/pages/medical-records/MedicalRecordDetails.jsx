@@ -1,374 +1,644 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
-import { useMedicalRecords } from '../../hooks/useMedicalRecords';
+import { getMedicalRecord, updateVitals, updateDoctorDiagnosis, updatePharmacy, completeBilling } from '../../firebase/db';
+import { formatDate } from '../../utils/formatters';
 import { 
-  formatDate, 
-  formatDateTime, 
-  formatBloodPressure, 
-  formatCurrency, 
-  calculateTotalFees,
-  formatTemperature
-} from '../../utils/formatters';
-import { ArrowLeft, Printer, Download, AlertCircle, Loader2, FileText, User, Stethoscope, DollarSign } from 'lucide-react';
+  ArrowLeft, 
+  User, 
+  Calendar, 
+  Clock,
+  Stethoscope,
+  Thermometer,
+  Weight,
+  Heart,
+  Activity,
+  Pill,
+  CreditCard,
+  CheckCircle2,
+  Save,
+  Loader2,
+  AlertCircle,
+  FileText,
+  ChevronRight,
+  ClipboardList
+} from 'lucide-react';
+
+const statusConfig = {
+  reception: { label: 'Reception', color: 'bg-amber-500/10 text-amber-500', step: 1 },
+  nurse: { label: 'Nurse / Vitals', color: 'bg-blue-500/10 text-blue-500', step: 2 },
+  doctor: { label: 'Doctor / Diagnosis', color: 'bg-purple-500/10 text-purple-500', step: 3 },
+  pharmacy: { label: 'Pharmacy', color: 'bg-green-500/10 text-green-500', step: 4 },
+  billing: { label: 'Billing', color: 'bg-orange-500/10 text-orange-500', step: 5 },
+  completed: { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-500', step: 6 },
+};
 
 const MedicalRecordDetails = () => {
-  const { id } = useParams();
+  const { patientId, recordId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { user, isDoctor, isAdmin, isPatient: isPatientUser } = useAuth();
-  const { getRecord, loading } = useMedicalRecords();
+  const { user, userRole } = useAuth();
   const [record, setRecord] = useState(null);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState(location.state?.success || false);
+  const [patient, setPatient] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const [vitalsForm, setVitalsForm] = useState({
+    temperature: '', weight: '', height: '', bloodPressure: '', pulse: '', spo2: '', notes: ''
+  });
+  const [doctorForm, setDoctorForm] = useState({
+    diagnosis: '', symptoms: '', notesForNextVisit: '', services: []
+  });
+  const [pharmacyForm, setPharmacyForm] = useState({
+    medications: [{ name: '', dosage: '', quantity: '', instructions: '', price: '' }]
+  });
+  const [billingForm, setBillingForm] = useState({
+    servicesTotal: 0, medicationsTotal: 0, totalAmount: 0, paid: false, paymentMethod: ''
+  });
 
   useEffect(() => {
-    loadRecord();
-  }, [id]);
+    loadData();
+  }, [patientId, recordId]);
 
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(false), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
 
-  const loadRecord = async () => {
     try {
-      const data = await getRecord(id);
-      if (!data) {
+      const patientDoc = await getDoc(doc(db, 'users', patientId));
+      if (patientDoc.exists()) {
+        setPatient({ id: patientDoc.id, ...patientDoc.data() });
+      }
+
+      const recordData = await getMedicalRecord(patientId, recordId);
+      if (recordData) {
+        setRecord(recordData);
+
+        if (recordData.vitals) {
+          setVitalsForm({
+            temperature: recordData.vitals.temperature || '',
+            weight: recordData.vitals.weight || '',
+            height: recordData.vitals.height || '',
+            bloodPressure: recordData.vitals.bloodPressure || '',
+            pulse: recordData.vitals.pulse || '',
+            spo2: recordData.vitals.spo2 || '',
+            notes: recordData.vitals.notes || '',
+          });
+        }
+        if (recordData.doctor) {
+          setDoctorForm({
+            diagnosis: recordData.doctor.diagnosis || '',
+            symptoms: recordData.doctor.symptoms || '',
+            notesForNextVisit: recordData.doctor.notesForNextVisit || '',
+            services: recordData.doctor.services || [],
+          });
+        }
+        if (recordData.pharmacy) {
+          setPharmacyForm({
+            medications: recordData.pharmacy.medications || [{ name: '', dosage: '', quantity: '', instructions: '', price: '' }],
+          });
+        }
+        if (recordData.billing) {
+          setBillingForm({
+            servicesTotal: recordData.billing.servicesTotal || 0,
+            medicationsTotal: recordData.billing.medicationsTotal || 0,
+            totalAmount: recordData.billing.totalAmount || 0,
+            paid: recordData.billing.paid || false,
+            paymentMethod: recordData.billing.paymentMethod || '',
+          });
+        }
+      } else {
         setError('Medical record not found');
-        return;
       }
-
-      // Check access permissions
-      const isOwner = isDoctor && data.doctorId === user?.uid;
-      const isAdmin_ = isAdmin;
-      const isPatientOwner = isPatientUser && data.patientId === user?.patientId;
-
-      if (!isOwner && !isAdmin_ && !isPatientOwner) {
-        setError('You do not have permission to view this record');
-        return;
-      }
-
-      setRecord(data);
     } catch (err) {
-      console.error('Failed to load medical record:', err);
+      console.error('Failed to load record:', err);
       setError('Failed to load medical record');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const canEditStage = (stage) => {
+    const roleStages = {
+      receptionist: ['reception', 'billing'],
+      nurse: ['nurse'],
+      doctor: ['doctor'],
+      pharmacist: ['pharmacy'],
+      admin: Object.keys(statusConfig),
+    };
+    return roleStages[userRole]?.includes(stage);
   };
 
-  const handleDownloadPDF = () => {
-    // For now, use browser print-to-PDF. In production, use a library like pdfkit or jsPDF
-    alert('PDF download feature: Use Print and Save as PDF in your browser.');
+  const isStageActive = (stage) => record?.status === stage;
+  const isStageComplete = (stage) => {
+    const steps = ['reception', 'nurse', 'doctor', 'pharmacy', 'billing', 'completed'];
+    const currentIdx = steps.indexOf(record?.status);
+    const stageIdx = steps.indexOf(stage);
+    return stageIdx < currentIdx;
   };
 
-  if (error && !record) {
-    return (
-      <div className="space-y-6">
-        <button
-          onClick={() => navigate('/medical-records')}
-          className="flex items-center gap-2 text-venus-text-muted hover:text-venus-text-primary transition-colors"
-        >
-          <ArrowLeft className="w-5 h-5" />
-          Back to Medical Records
-        </button>
-        <div className="card bg-venus-danger/10 border border-venus-danger/30">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-venus-danger flex-shrink-0 mt-0.5" />
-            <p className="text-venus-danger">{error}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const handleSaveVitals = async () => {
+    setSaving(true);
+    try {
+      await updateVitals(patientId, recordId, {
+        ...vitalsForm,
+        recordedBy: user?.displayName || user?.email,
+      });
+      await loadData();
+    } catch (err) {
+      alert('Failed to save vitals: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
-  if (loading || !record) {
+  const handleSaveDoctor = async () => {
+    setSaving(true);
+    try {
+      await updateDoctorDiagnosis(patientId, recordId, {
+        ...doctorForm,
+        recordedBy: user?.displayName || user?.email,
+      });
+      await loadData();
+    } catch (err) {
+      alert('Failed to save diagnosis: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePharmacy = async () => {
+    setSaving(true);
+    try {
+      await updatePharmacy(patientId, recordId, {
+        medications: pharmacyForm.medications.filter(m => m.name.trim()),
+        dispensedBy: user?.displayName || user?.email,
+      });
+      await loadData();
+    } catch (err) {
+      alert('Failed to save pharmacy data: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCompleteBilling = async () => {
+    setSaving(true);
+    try {
+      await completeBilling(patientId, recordId, {
+        ...billingForm,
+        billedBy: user?.displayName || user?.email,
+      });
+      await loadData();
+    } catch (err) {
+      alert('Failed to complete billing: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const addMedication = () => {
+    setPharmacyForm(prev => ({
+      ...prev,
+      medications: [...prev.medications, { name: '', dosage: '', quantity: '', instructions: '', price: '' }]
+    }));
+  };
+
+  const removeMedication = (idx) => {
+    setPharmacyForm(prev => ({
+      ...prev,
+      medications: prev.medications.filter((_, i) => i !== idx)
+    }));
+  };
+
+  const updateMedication = (idx, field, value) => {
+    setPharmacyForm(prev => ({
+      ...prev,
+      medications: prev.medications.map((m, i) => i === idx ? { ...m, [field]: value } : m)
+    }));
+  };
+
+  const calculateTotals = () => {
+    const servicesTotal = doctorForm.services.reduce((sum, s) => sum + (parseFloat(s.price) || 0), 0);
+    const medicationsTotal = pharmacyForm.medications.reduce((sum, m) => sum + (parseFloat(m.price) || 0), 0);
+    const total = servicesTotal + medicationsTotal;
+    setBillingForm(prev => ({ ...prev, servicesTotal, medicationsTotal, totalAmount: total }));
+  };
+
+  if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="w-8 h-8 text-venus-primary-400 animate-spin" />
+        <Loader2 className="animate-spin w-8 h-8 text-venus-primary-500" />
       </div>
     );
   }
 
-  const total = calculateTotalFees(
-    record.consultationFee,
-    record.laboratoryFee,
-    record.medicationFee,
-    record.otherCharges
-  );
-
-  return (
-    <div className="space-y-6 print:space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <button
-          onClick={() => navigate('/medical-records')}
-          className="flex items-center gap-2 text-venus-text-muted hover:text-venus-text-primary transition-colors print:hidden"
-        >
-          <ArrowLeft className="w-5 h-5" />
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4">
+        <AlertCircle className="w-12 h-12 text-venus-danger" />
+        <p className="text-venus-danger">{error}</p>
+        <button onClick={() => navigate('/medical-records')} className="btn-secondary">
           Back to Medical Records
         </button>
-        <div className="flex gap-2 print:hidden">
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-venus-primary-500/20 text-venus-primary-400 hover:bg-venus-primary-500/30 rounded transition-colors"
-          >
-            <Printer className="w-5 h-5" />
-            Print
-          </button>
-          <button
-            onClick={handleDownloadPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-venus-info/20 text-venus-info hover:bg-venus-info/30 rounded transition-colors"
-          >
-            <Download className="w-5 h-5" />
-            Download PDF
-          </button>
-        </div>
       </div>
+    );
+  }
 
-      {/* Success Message */}
-      {success && (
-        <div className="p-4 bg-venus-success/10 border border-venus-success/30 rounded-lg text-venus-success flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          <p>Medical record created successfully!</p>
+  const statusInfo = statusConfig[record?.status] || statusConfig.reception;
+
+  return (
+    <div className="space-y-6">
+      <button onClick={() => navigate('/medical-records')}
+        className="flex items-center gap-2 text-venus-text-muted hover:text-venus-text-primary transition-colors">
+        <ArrowLeft className="w-5 h-5" />
+        Back to Medical Records
+      </button>
+
+      {patient && (
+        <div className="card">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 bg-venus-primary-500/20 rounded-xl flex items-center justify-center">
+              <User className="w-7 h-7 text-venus-primary-400" />
+            </div>
+            <div className="flex-1">
+              <h1 className="text-xl font-bold text-venus-text-primary">
+                {patient.firstName} {patient.lastName}
+              </h1>
+              <div className="flex flex-wrap gap-3 mt-2">
+                <span className="flex items-center gap-1 text-sm text-venus-text-muted">
+                  <Calendar className="w-4 h-4" />
+                  Visit: {record?.visitDate}
+                </span>
+                <span className="flex items-center gap-1 text-sm text-venus-text-muted">
+                  <Clock className="w-4 h-4" />
+                  {record?.visitTime}
+                </span>
+                <span className={`px-2.5 py-0.5 text-xs rounded-full font-medium ${statusInfo.color}`}>
+                  {statusInfo.label}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Document Header */}
-      <div className="card bg-venus-bg-tertiary border-2 border-venus-primary-500 print:border-gray-300">
-        <div className="text-center mb-6 pb-6 border-b border-venus-border">
-          <h1 className="text-3xl font-bold text-venus-text-primary print:text-black">VENUS CLINIC</h1>
-          <p className="text-venus-text-secondary mt-1 print:text-gray-600">Information System - Medical Record</p>
-          <p className="text-xs text-venus-text-muted mt-2 print:text-gray-600">Professional Clinical Documentation</p>
+      {/* Progress Bar */}
+      <div className="card">
+        <div className="flex items-center justify-between">
+          {Object.entries(statusConfig).map(([key, config], idx) => {
+            const isComplete = isStageComplete(key);
+            const isActive = isStageActive(key);
+            return (
+              <div key={key} className="flex items-center flex-1">
+                <div className="flex flex-col items-center flex-1">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
+                    isComplete ? 'bg-emerald-500 text-white' :
+                    isActive ? 'bg-venus-primary-500 text-white' :
+                    'bg-venus-bg-tertiary text-venus-text-muted border border-venus-border'
+                  }`}>
+                    {isComplete ? <CheckCircle2 className="w-4 h-4" /> : config.step}
+                  </div>
+                  <span className={`text-xs mt-1.5 font-medium ${isActive ? 'text-venus-primary-400' : 'text-venus-text-muted'}`}>
+                    {config.label}
+                  </span>
+                </div>
+                {idx < 5 && (
+                  <ChevronRight className={`w-4 h-4 mx-1 ${isComplete ? 'text-emerald-500' : 'text-venus-border'}`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* RECEPTION */}
+      <div className={`card ${isStageActive('reception') ? 'ring-2 ring-amber-500/30' : ''}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <ClipboardList className="w-5 h-5 text-amber-500" />
+          <h3 className="text-lg font-semibold text-venus-text-primary">Reception Check-In</h3>
+          {isStageComplete('reception') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
+        </div>
+        {record?.reception ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-venus-text-muted">Checked In By</p>
+                <p className="text-venus-text-primary font-medium">{record.reception.checkedInBy}</p>
+              </div>
+              <div>
+                <p className="text-sm text-venus-text-muted">Check-In Time</p>
+                <p className="text-venus-text-primary">{formatDate(record.reception.checkedInAt)}</p>
+              </div>
+            </div>
+            {record.reception.notes && (
+              <div>
+                <p className="text-sm text-venus-text-muted">Notes</p>
+                <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">{record.reception.notes}</p>
+              </div>
+            )}
+          </div>
+        ) : <p className="text-venus-text-muted text-sm italic">No reception data</p>}
+      </div>
+
+      {/* NURSE / VITALS */}
+      <div className={`card ${isStageActive('nurse') ? 'ring-2 ring-blue-500/30' : ''}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <Stethoscope className="w-5 h-5 text-blue-500" />
+          <h3 className="text-lg font-semibold text-venus-text-primary">Nurse / Vitals</h3>
+          {isStageComplete('nurse') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
         </div>
 
-        {/* Patient Information */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 pb-6 border-b border-venus-border">
-          <div>
-            <h3 className="font-semibold text-venus-text-primary mb-3 flex items-center gap-2 print:text-black">
-              <User className="w-5 h-5" />
-              Patient Information
-            </h3>
-            <div className="space-y-2 text-sm">
-              <p><span className="font-medium text-venus-text-secondary">Name:</span> <span className="text-venus-text-primary print:text-black">{record.patientName}</span></p>
-              <p><span className="font-medium text-venus-text-secondary">Patient ID:</span> <span className="font-mono print:text-black">{record.patientId}</span></p>
-              <p><span className="font-medium text-venus-text-secondary">Age:</span> <span className="print:text-black">{record.patientAge} years</span></p>
-              <p><span className="font-medium text-venus-text-secondary">Gender:</span> <span className="capitalize print:text-black">{record.patientGender}</span></p>
-              {record.patientPhone && <p><span className="font-medium text-venus-text-secondary">Phone:</span> <span className="print:text-black">{record.patientPhone}</span></p>}
-              {record.patientEmail && <p><span className="font-medium text-venus-text-secondary">Email:</span> <span className="print:text-black">{record.patientEmail}</span></p>}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="font-semibold text-venus-text-primary mb-3 flex items-center gap-2 print:text-black">
-              <Stethoscope className="w-5 h-5" />
-              Visit Information
-            </h3>
-            <div className="space-y-2 text-sm">
-              <p><span className="font-medium text-venus-text-secondary">Doctor:</span> <span className="text-venus-text-primary print:text-black">{record.doctorName}</span></p>
-              <p><span className="font-medium text-venus-text-secondary">Visit Date:</span> <span className="print:text-black">{formatDate(record.visitDate)}</span></p>
-              <p><span className="font-medium text-venus-text-secondary">Visit Time:</span> <span className="print:text-black">{record.visitTime}</span></p>
-              <p><span className="font-medium text-venus-text-secondary">Visit Type:</span> <span className="capitalize print:text-black">{record.visitType}</span></p>
-              <p><span className="font-medium text-venus-text-secondary">Record Created:</span> <span className="text-xs print:text-black">{formatDateTime(record.createdAt)}</span></p>
-            </div>
-          </div>
-        </div>
-
-        {/* Chief Complaint */}
-        <div className="mb-6 pb-6 border-b border-venus-border">
-          <h3 className="font-semibold text-venus-text-primary mb-2 print:text-black">Chief Complaint</h3>
-          <p className="text-sm text-venus-text-secondary print:text-gray-700">{record.chiefComplaint}</p>
-        </div>
-
-        {/* Medical History */}
-        {(record.presentIllness || record.pastMedicalHistory || record.surgicalHistory || record.familyHistory || record.socialHistory) && (
-          <div className="mb-6 pb-6 border-b border-venus-border">
-            <h3 className="font-semibold text-venus-text-primary mb-3 print:text-black">Medical History</h3>
-            <div className="space-y-3 text-sm">
-              {record.presentIllness && (
-                <div>
-                  <p className="font-medium text-venus-text-secondary mb-1 print:text-black">History of Present Illness:</p>
-                  <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.presentIllness}</p>
-                </div>
-              )}
-              {record.pastMedicalHistory && (
-                <div>
-                  <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Past Medical History:</p>
-                  <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.pastMedicalHistory}</p>
-                </div>
-              )}
-              {record.surgicalHistory && (
-                <div>
-                  <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Surgical History:</p>
-                  <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.surgicalHistory}</p>
-                </div>
-              )}
-              {record.familyHistory && (
-                <div>
-                  <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Family History:</p>
-                  <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.familyHistory}</p>
-                </div>
-              )}
-              {record.socialHistory && (
-                <div>
-                  <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Social History:</p>
-                  <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.socialHistory}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Allergies */}
-        {record.allergies && record.allergies.length > 0 && (
-          <div className="mb-6 pb-6 border-b border-venus-border">
-            <h3 className="font-semibold text-venus-text-primary mb-3 print:text-black">Allergies</h3>
-            <div className="space-y-2 text-sm">
-              {record.allergies.map((allergy, idx) => (
-                <div key={idx} className="p-2 bg-venus-danger/5 rounded border border-venus-danger/20">
-                  <p className="print:text-black"><span className="font-medium">Allergy:</span> {allergy.name}</p>
-                  <p className="print:text-black"><span className="font-medium">Reaction:</span> {allergy.reaction} <span className="text-venus-warning">({allergy.severity})</span></p>
+        {isStageActive('nurse') && canEditStage('nurse') ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {[
+                { label: 'Temperature (°C)', key: 'temperature', placeholder: '36.5' },
+                { label: 'Weight (kg)', key: 'weight', placeholder: '70' },
+                { label: 'Height (cm)', key: 'height', placeholder: '175' },
+                { label: 'Blood Pressure', key: 'bloodPressure', placeholder: '120/80' },
+                { label: 'Pulse (bpm)', key: 'pulse', placeholder: '72' },
+                { label: 'SpO2 (%)', key: 'spo2', placeholder: '98' },
+              ].map(field => (
+                <div key={field.key}>
+                  <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">{field.label}</label>
+                  <input
+                    type={field.key === 'bloodPressure' ? 'text' : 'number'}
+                    step={field.key === 'temperature' ? '0.1' : field.key === 'weight' ? '0.1' : '1'}
+                    value={vitalsForm[field.key]}
+                    onChange={(e) => setVitalsForm({...vitalsForm, [field.key]: e.target.value})}
+                    className="input-field"
+                    placeholder={field.placeholder}
+                  />
                 </div>
               ))}
             </div>
-          </div>
-        )}
-
-        {/* Current Medications */}
-        {record.currentMedications && record.currentMedications.length > 0 && (
-          <div className="mb-6 pb-6 border-b border-venus-border">
-            <h3 className="font-semibold text-venus-text-primary mb-3 print:text-black">Current Medications</h3>
-            <div className="space-y-2 text-sm">
-              {record.currentMedications.map((med, idx) => (
-                <div key={idx} className="p-2 bg-venus-info/5 rounded border border-venus-info/20">
-                  <p className="print:text-black"><span className="font-medium">{med.name}</span> - {med.dosage}</p>
-                  <p className="text-xs text-venus-text-muted print:text-gray-600">Frequency: {med.frequency}</p>
-                </div>
-              ))}
+            <div>
+              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Additional Notes</label>
+              <textarea value={vitalsForm.notes} onChange={(e) => setVitalsForm({...vitalsForm, notes: e.target.value})}
+                rows={2} className="input-field resize-none" placeholder="Any observations..." />
             </div>
+            <button onClick={handleSaveVitals} disabled={saving} className="btn-primary flex items-center gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save Vitals & Send to Doctor
+            </button>
           </div>
-        )}
-
-        {/* Vital Signs */}
-        {(record.temperature || record.bloodPressureSystolic || record.pulseRate) && (
-          <div className="mb-6 pb-6 border-b border-venus-border">
-            <h3 className="font-semibold text-venus-text-primary mb-3 print:text-black">Vital Signs</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              {record.temperature && (
-                <div className="p-2 bg-venus-bg-secondary rounded print:border print:border-gray-300">
-                  <p className="text-venus-text-muted text-xs print:text-gray-600">Temperature</p>
-                  <p className="font-semibold text-venus-text-primary print:text-black">{formatTemperature(record.temperature)}</p>
-                </div>
-              )}
-              {record.bloodPressureSystolic && (
-                <div className="p-2 bg-venus-bg-secondary rounded print:border print:border-gray-300">
-                  <p className="text-venus-text-muted text-xs print:text-gray-600">Blood Pressure</p>
-                  <p className="font-semibold text-venus-text-primary print:text-black">{formatBloodPressure(record.bloodPressureSystolic, record.bloodPressureDiastolic)}</p>
-                </div>
-              )}
-              {record.pulseRate && (
-                <div className="p-2 bg-venus-bg-secondary rounded print:border print:border-gray-300">
-                  <p className="text-venus-text-muted text-xs print:text-gray-600">Pulse Rate</p>
-                  <p className="font-semibold text-venus-text-primary print:text-black">{record.pulseRate} bpm</p>
-                </div>
-              )}
-              {record.oxygenSaturation && (
-                <div className="p-2 bg-venus-bg-secondary rounded print:border print:border-gray-300">
-                  <p className="text-venus-text-muted text-xs print:text-gray-600">O₂ Saturation</p>
-                  <p className="font-semibold text-venus-text-primary print:text-black">{record.oxygenSaturation}%</p>
-                </div>
-              )}
+        ) : record?.vitals ? (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <VitalDisplay icon={Thermometer} label="Temperature" value={`${record.vitals.temperature} °C`} />
+              <VitalDisplay icon={Weight} label="Weight" value={`${record.vitals.weight} kg`} />
+              <VitalDisplay icon={Activity} label="Height" value={`${record.vitals.height} cm`} />
+              <VitalDisplay icon={Heart} label="Blood Pressure" value={record.vitals.bloodPressure} />
+              <VitalDisplay icon={Activity} label="Pulse" value={`${record.vitals.pulse} bpm`} />
+              <VitalDisplay icon={Activity} label="SpO2" value={`${record.vitals.spo2}%`} />
             </div>
+            {record.vitals.notes && (
+              <div className="bg-venus-bg-tertiary rounded-lg p-3">
+                <p className="text-sm text-venus-text-muted">Notes</p>
+                <p className="text-venus-text-primary text-sm mt-1">{record.vitals.notes}</p>
+              </div>
+            )}
+            <p className="text-xs text-venus-text-muted">Recorded by {record.vitals.recordedBy}</p>
           </div>
-        )}
+        ) : <p className="text-venus-text-muted text-sm italic">Waiting for vitals...</p>}
+      </div>
 
-        {/* Physical Examination */}
-        {record.physicalExamination && (
-          <div className="mb-6 pb-6 border-b border-venus-border">
-            <h3 className="font-semibold text-venus-text-primary mb-2 print:text-black">Physical Examination</h3>
-            <p className="text-sm text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.physicalExamination}</p>
-          </div>
-        )}
-
-        {/* Diagnosis */}
-        <div className="mb-6 pb-6 border-b border-venus-border">
-          <h3 className="font-semibold text-venus-text-primary mb-3 print:text-black">Diagnosis</h3>
-          <div className="space-y-2 text-sm">
-            <p><span className="font-medium text-venus-text-secondary">Primary:</span> <span className="text-venus-text-primary print:text-black">{record.primaryDiagnosis}</span></p>
-            {record.secondaryDiagnosis && <p><span className="font-medium text-venus-text-secondary">Secondary:</span> <span className="text-venus-text-secondary print:text-gray-700">{record.secondaryDiagnosis}</span></p>}
-            {record.icdCode && <p><span className="font-medium text-venus-text-secondary">ICD Code:</span> <span className="font-mono text-venus-text-secondary print:text-gray-700">{record.icdCode}</span></p>}
-          </div>
+      {/* DOCTOR */}
+      <div className={`card ${isStageActive('doctor') ? 'ring-2 ring-purple-500/30' : ''}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <Stethoscope className="w-5 h-5 text-purple-500" />
+          <h3 className="text-lg font-semibold text-venus-text-primary">Doctor / Diagnosis</h3>
+          {isStageComplete('doctor') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
         </div>
 
-        {/* Treatment Plan */}
-        <div className="mb-6 pb-6 border-b border-venus-border">
-          <h3 className="font-semibold text-venus-text-primary mb-3 print:text-black">Treatment Plan</h3>
-          <div className="space-y-3 text-sm">
-            {record.prescribedMedications && (
-              <div>
-                <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Prescribed Medications:</p>
-                <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.prescribedMedications}</p>
-              </div>
-            )}
-            {record.procedures && (
-              <div>
-                <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Procedures:</p>
-                <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.procedures}</p>
-              </div>
-            )}
-            {record.doctorInstructions && (
-              <div>
-                <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Doctor Instructions:</p>
-                <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.doctorInstructions}</p>
-              </div>
-            )}
-            {record.followUpInstructions && (
-              <div>
-                <p className="font-medium text-venus-text-secondary mb-1 print:text-black">Follow-up Instructions:</p>
-                <p className="text-venus-text-secondary print:text-gray-700 whitespace-pre-wrap">{record.followUpInstructions}</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Payment Summary */}
-        <div className="card bg-venus-bg-tertiary border border-venus-border">
-          <h3 className="font-semibold text-venus-text-primary mb-4 flex items-center gap-2 print:text-black">
-            <DollarSign className="w-5 h-5" />
-            Payment Summary
-          </h3>
-          <div className="space-y-2 text-sm">
-            {record.consultationFee && <p><span className="text-venus-text-secondary">Consultation:</span> <span className="font-semibold print:text-black">{formatCurrency(record.consultationFee)}</span></p>}
-            {record.laboratoryFee && <p><span className="text-venus-text-secondary">Laboratory:</span> <span className="font-semibold print:text-black">{formatCurrency(record.laboratoryFee)}</span></p>}
-            {record.medicationFee && <p><span className="text-venus-text-secondary">Medication:</span> <span className="font-semibold print:text-black">{formatCurrency(record.medicationFee)}</span></p>}
-            {record.otherCharges && <p><span className="text-venus-text-secondary">Other Charges:</span> <span className="font-semibold print:text-black">{formatCurrency(record.otherCharges)}</span></p>}
-            <div className="border-t border-venus-border pt-2 mt-2">
-              <p className="font-semibold"><span className="text-venus-text-secondary">Total Amount:</span> <span className="text-lg print:text-black">{formatCurrency(total)}</span></p>
-              <p className="text-xs text-venus-text-muted mt-1 print:text-gray-600">
-                Payment Status: <span className={`font-medium capitalize ${
-                  record.paymentStatus === 'paid' ? 'text-venus-success' :
-                  record.paymentStatus === 'pending' ? 'text-venus-warning' :
-                  'text-venus-info'
-                }`}>{record.paymentStatus}</span>
-              </p>
+        {isStageActive('doctor') && canEditStage('doctor') ? (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Symptoms *</label>
+              <textarea value={doctorForm.symptoms} onChange={(e) => setDoctorForm({...doctorForm, symptoms: e.target.value})}
+                rows={2} className="input-field resize-none" placeholder="Patient complaints and observed symptoms..." />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Diagnosis *</label>
+              <textarea value={doctorForm.diagnosis} onChange={(e) => setDoctorForm({...doctorForm, diagnosis: e.target.value})}
+                rows={3} className="input-field resize-none" placeholder="Primary and secondary diagnosis..." />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Services Provided</label>
+              <div className="space-y-2">
+                {doctorForm.services.map((service, idx) => (
+                  <div key={idx} className="flex gap-2">
+                    <input value={service.name}
+                      onChange={(e) => {
+                        const newServices = [...doctorForm.services];
+                        newServices[idx] = { ...service, name: e.target.value };
+                        setDoctorForm({...doctorForm, services: newServices});
+                      }}
+                      className="input-field flex-1" placeholder="Service name" />
+                    <input type="number" value={service.price}
+                      onChange={(e) => {
+                        const newServices = [...doctorForm.services];
+                        newServices[idx] = { ...service, price: e.target.value };
+                        setDoctorForm({...doctorForm, services: newServices});
+                      }}
+                      className="input-field w-24" placeholder="Price" />
+                    <button onClick={() => setDoctorForm({...doctorForm, services: doctorForm.services.filter((_, i) => i !== idx)})}
+                      className="text-venus-danger hover:bg-venus-danger/10 px-2 rounded">×</button>
+                  </div>
+                ))}
+                <button onClick={() => setDoctorForm({...doctorForm, services: [...doctorForm.services, { name: '', price: '' }]})}
+                  className="text-sm text-venus-primary-400 hover:underline">+ Add Service</button>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Notes for Next Visit</label>
+              <textarea value={doctorForm.notesForNextVisit} onChange={(e) => setDoctorForm({...doctorForm, notesForNextVisit: e.target.value})}
+                rows={2} className="input-field resize-none" placeholder="Follow-up instructions, tests to run next time, etc." />
+            </div>
+            <button onClick={handleSaveDoctor} disabled={saving} className="btn-primary flex items-center gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save Diagnosis & Send to Pharmacy
+            </button>
           </div>
+        ) : record?.doctor ? (
+          <div className="space-y-3">
+            <div>
+              <p className="text-sm text-venus-text-muted">Symptoms</p>
+              <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">{record.doctor.symptoms}</p>
+            </div>
+            <div>
+              <p className="text-sm text-venus-text-muted">Diagnosis</p>
+              <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">{record.doctor.diagnosis}</p>
+            </div>
+            {record.doctor.services?.length > 0 && (
+              <div>
+                <p className="text-sm text-venus-text-muted">Services</p>
+                <div className="space-y-1 mt-1">
+                  {record.doctor.services.map((s, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span className="text-venus-text-primary">{s.name}</span>
+                      <span className="text-venus-text-secondary">K{s.price}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {record.doctor.notesForNextVisit && (
+              <div>
+                <p className="text-sm text-venus-text-muted">Notes for Next Visit</p>
+                <p className="text-venus-text-primary bg-venus-bg-tertiary/50 rounded-lg p-3 mt-1 text-sm border border-venus-border border-dashed">{record.doctor.notesForNextVisit}</p>
+              </div>
+            )}
+            <p className="text-xs text-venus-text-muted">Recorded by {record.doctor.recordedBy}</p>
+          </div>
+        ) : <p className="text-venus-text-muted text-sm italic">Waiting for doctor diagnosis...</p>}
+      </div>
+
+      {/* PHARMACY */}
+      <div className={`card ${isStageActive('pharmacy') ? 'ring-2 ring-green-500/30' : ''}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <Pill className="w-5 h-5 text-green-500" />
+          <h3 className="text-lg font-semibold text-venus-text-primary">Pharmacy</h3>
+          {isStageComplete('pharmacy') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
         </div>
 
-        {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-venus-border text-center text-xs text-venus-text-muted print:text-gray-600 print:border-gray-300">
-          <p className="font-medium text-venus-text-secondary print:text-black">Medical Record - Confidential</p>
-          <p className="mt-1">This document contains sensitive medical information. Authorized personnel only.</p>
-          <p className="mt-2">Generated: {formatDateTime(new Date())}</p>
+        {isStageActive('pharmacy') && canEditStage('pharmacy') ? (
+          <div className="space-y-4">
+            {pharmacyForm.medications.map((med, idx) => (
+              <div key={idx} className="border border-venus-border rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-venus-text-secondary">Medication #{idx + 1}</span>
+                  {pharmacyForm.medications.length > 1 && (
+                    <button onClick={() => removeMedication(idx)} className="text-venus-danger text-sm hover:underline">Remove</button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <input value={med.name} onChange={(e) => updateMedication(idx, 'name', e.target.value)}
+                    className="input-field" placeholder="Medication name" />
+                  <input value={med.dosage} onChange={(e) => updateMedication(idx, 'dosage', e.target.value)}
+                    className="input-field" placeholder="Dosage (e.g., 500mg)" />
+                  <input value={med.quantity} onChange={(e) => updateMedication(idx, 'quantity', e.target.value)}
+                    className="input-field" placeholder="Quantity" />
+                  <input type="number" value={med.price} onChange={(e) => updateMedication(idx, 'price', e.target.value)}
+                    className="input-field" placeholder="Price (K)" />
+                </div>
+                <input value={med.instructions} onChange={(e) => updateMedication(idx, 'instructions', e.target.value)}
+                  className="input-field" placeholder="Instructions (e.g., Take after meals)" />
+              </div>
+            ))}
+            <button onClick={addMedication} className="text-sm text-venus-primary-400 hover:underline">+ Add Medication</button>
+            <button onClick={handleSavePharmacy} disabled={saving} className="btn-primary flex items-center gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              Save & Send to Billing
+            </button>
+          </div>
+        ) : record?.pharmacy ? (
+          <div className="space-y-3">
+            {record.pharmacy.medications?.map((med, idx) => (
+              <div key={idx} className="border border-venus-border rounded-lg p-3">
+                <div className="flex justify-between">
+                  <span className="font-medium text-venus-text-primary">{med.name}</span>
+                  <span className="text-venus-text-secondary">K{med.price}</span>
+                </div>
+                <p className="text-sm text-venus-text-muted">{med.dosage} — Qty: {med.quantity}</p>
+                <p className="text-sm text-venus-text-secondary mt-1">{med.instructions}</p>
+              </div>
+            ))}
+            <p className="text-xs text-venus-text-muted">Dispensed by {record.pharmacy.dispensedBy}</p>
+          </div>
+        ) : <p className="text-venus-text-muted text-sm italic">Waiting for pharmacy...</p>}
+      </div>
+
+      {/* BILLING */}
+      <div className={`card ${isStageActive('billing') ? 'ring-2 ring-orange-500/30' : ''}`}>
+        <div className="flex items-center gap-2 mb-4">
+          <CreditCard className="w-5 h-5 text-orange-500" />
+          <h3 className="text-lg font-semibold text-venus-text-primary">Billing & Payment</h3>
+          {isStageComplete('billing') && <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />}
         </div>
+
+        {isStageActive('billing') && canEditStage('billing') ? (
+          <div className="space-y-4">
+            <div className="bg-venus-bg-tertiary rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-venus-text-muted">Services Total</span>
+                <span className="text-venus-text-primary">K{billingForm.servicesTotal}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-venus-text-muted">Medications Total</span>
+                <span className="text-venus-text-primary">K{billingForm.medicationsTotal}</span>
+              </div>
+              <div className="border-t border-venus-border pt-2 flex justify-between font-bold">
+                <span className="text-venus-text-primary">Total Amount</span>
+                <span className="text-venus-primary-400">K{billingForm.totalAmount}</span>
+              </div>
+            </div>
+            <button onClick={calculateTotals} className="text-sm text-venus-primary-400 hover:underline">Recalculate Totals</button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">Payment Method</label>
+                <select value={billingForm.paymentMethod} onChange={(e) => setBillingForm({...billingForm, paymentMethod: e.target.value})}
+                  className="input-field">
+                  <option value="">Select...</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card</option>
+                  <option value="mobile_money">Mobile Money</option>
+                  <option value="insurance">Insurance</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 pt-6">
+                <input type="checkbox" checked={billingForm.paid}
+                  onChange={(e) => setBillingForm({...billingForm, paid: e.target.checked})}
+                  className="w-4 h-4 rounded border-venus-border" />
+                <label className="text-sm text-venus-text-secondary">Payment Received</label>
+              </div>
+            </div>
+            <button onClick={handleCompleteBilling} disabled={saving || !billingForm.paid}
+              className="btn-primary flex items-center gap-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              Complete Billing & Close Visit
+            </button>
+            {!billingForm.paid && <p className="text-xs text-venus-warning">Please confirm payment received before closing.</p>}
+          </div>
+        ) : record?.billing ? (
+          <div className="space-y-3">
+            <div className="bg-venus-bg-tertiary rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-venus-text-muted">Services</span>
+                <span className="text-venus-text-primary">K{record.billing.servicesTotal}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-venus-text-muted">Medications</span>
+                <span className="text-venus-text-primary">K{record.billing.medicationsTotal}</span>
+              </div>
+              <div className="border-t border-venus-border pt-2 flex justify-between font-bold">
+                <span className="text-venus-text-primary">Total Paid</span>
+                <span className="text-venus-primary-400">K{record.billing.totalAmount}</span>
+              </div>
+            </div>
+            <div className="flex gap-4 text-sm">
+              <span className="text-venus-text-muted">Method: <span className="text-venus-text-primary capitalize">{record.billing.paymentMethod}</span></span>
+              <span className="text-venus-text-muted">Status: <span className={record.billing.paid ? 'text-venus-success' : 'text-venus-warning'}>{record.billing.paid ? 'Paid' : 'Pending'}</span></span>
+            </div>
+            <p className="text-xs text-venus-text-muted">Billed by {record.billing.billedBy}</p>
+          </div>
+        ) : <p className="text-venus-text-muted text-sm italic">Waiting for billing...</p>}
       </div>
     </div>
   );
 };
+
+const VitalDisplay = ({ icon: Icon, label, value }) => (
+  <div className="flex items-center gap-3 bg-venus-bg-tertiary rounded-lg p-3">
+    <Icon className="w-5 h-5 text-venus-primary-400" />
+    <div>
+      <p className="text-xs text-venus-text-muted">{label}</p>
+      <p className="text-sm font-medium text-venus-text-primary">{value || '—'}</p>
+    </div>
+  </div>
+);
 
 export default MedicalRecordDetails;

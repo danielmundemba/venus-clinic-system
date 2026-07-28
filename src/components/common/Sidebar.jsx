@@ -9,12 +9,13 @@ import {
   Shield, 
   LogOut,
   Activity,
-  UserPlus
+  UserPlus,
+  ClipboardList
 } from 'lucide-react';
 import { logoutUser } from '../../firebase/auth';
 
 const Sidebar = () => {
-  const { user, userRole, isAdmin, isDoctor, isReceptionist, isNurse } = useAuth();
+  const { user, userRole } = useAuth();
   const location = useLocation();
 
   const navItems = [
@@ -22,13 +23,13 @@ const Sidebar = () => {
       path: '/dashboard', 
       label: 'Dashboard', 
       icon: LayoutDashboard,
-      roles: ['admin', 'doctor', 'receptionist', 'nurse']
+      roles: ['admin', 'doctor', 'receptionist', 'nurse', 'pharmacist']
     },
     { 
       path: '/patients', 
       label: 'Patients', 
       icon: Users,
-      roles: ['admin', 'doctor', 'receptionist', 'nurse']
+      roles: ['admin', 'doctor', 'receptionist', 'nurse', 'pharmacist']
     },
     { 
       path: '/appointments', 
@@ -45,8 +46,8 @@ const Sidebar = () => {
     { 
       path: '/medical-records', 
       label: 'Medical Records', 
-      icon: FileText,
-      roles: ['admin', 'doctor', 'nurse']
+      icon: ClipboardList,
+      roles: ['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']
     },
     { 
       path: '/billing', 
@@ -99,7 +100,7 @@ const Sidebar = () => {
           const Icon = item.icon;
           const isActive = location.pathname === item.path || 
                           location.pathname.startsWith(`${item.path}/`);
-          
+
           return (
             <NavLink
               key={item.path}

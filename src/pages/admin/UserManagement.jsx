@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   collection, 
   query, 
@@ -6,13 +6,15 @@ import {
   onSnapshot, 
   doc,
   updateDoc,
-  setDoc,
-  serverTimestamp,
   getDocs,
-  where
+  where,
+  serverTimestamp
 } from 'firebase/firestore';
 import { db } from '../../firebase/config';
+import { registerStaff } from '../../firebase/auth';
 import { useAuth } from '../../context/AuthContext';
+import { useAuditLog } from '../../hooks/useAuditLog';
+import { calculateAge } from '../../utils/formatters';
 import { 
   Users,
   Search,
@@ -22,6 +24,8 @@ import {
   UserCheck,
   Stethoscope,
   Phone,
+  Pill,
+  HeartPulse,
   Plus,
   X,
   RefreshCw,
@@ -31,17 +35,19 @@ import {
   AlertCircle,
   CheckCircle2,
   XCircle,
-  Filter,
-  MoreHorizontal,
-  Edit3,
-  Save,
   UserCog,
   Clock,
-  Activity
+  Activity,
+  Loader2,
+  Calendar,
+  MapPin,
+  Contact,
+  PartyPopper
 } from 'lucide-react';
 
-const UserManagement  = () => {
+const UserManagement = () => {
   const { user: currentUser, isAdmin } = useAuth();
+  const { logAction } = useAuditLog();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,25 +56,52 @@ const UserManagement  = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [editingUser, setEditingUser] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const usersPerPage = 10;
+
+  // Staff job roles — these are the only roles that can be assigned when
+  // creating a brand-new staff account (a "patient" account is created via
+  // the separate Patient Registration flow, not from here).
+  const roles = [
+    { value: 'admin', label: 'Admin', icon: Shield, color: 'bg-violet-500/15 text-violet-400 border-violet-500/30' },
+    { value: 'doctor', label: 'Doctor', icon: Stethoscope, color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
+    { value: 'receptionist', label: 'Receptionist', icon: Phone, color: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
+    { value: 'pharmacist', label: 'Pharmacist', icon: Pill, color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
+    { value: 'nurse', label: 'Nurse', icon: HeartPulse, color: 'bg-rose-500/15 text-rose-400 border-rose-500/30' }
+  ];
+
+  // 'patient' is not a job — it's what a user is when they have no staff
+  // role. It's included in allRoles (for filtering / relabeling / editing
+  // an EXISTING user), but never in `roles` (for creating a new staff
+  // account), since you can't "create someone as a patient" from this page.
+  const patientRoleConfig = {
+    value: 'patient',
+    label: 'Patient',
+    icon: User,
+    color: 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+  };
+  const allRoles = [...roles, patientRoleConfig];
+
+  // Create form state — staff + patient info combined
   const [createForm, setCreateForm] = useState({
     email: '',
     password: '',
     firstName: '',
     lastName: '',
-    role: 'receptionist'
+    role: 'receptionist',
+    phone: '',
+    DOB: '',
+    gender: 'male',
+    nrcNumber: '',
+    address: '',
+    emergencyContactName: '',
+    emergencyContactPhone: ''
   });
-  const [createError, setCreateError] = useState('');
-  const [createLoading, setCreateLoading] = useState(false);
-  const [updateLoading, setUpdateLoading] = useState(false);
-  const usersPerPage = 10;
 
-  const roles = [
-    { value: 'admin', label: 'Admin', icon: Shield, color: 'bg-violet-500/15 text-violet-400 border-violet-500/30' },
-    { value: 'doctor', label: 'Doctor', icon: Stethoscope, color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-    { value: 'receptionist', label: 'Receptionist', icon: Phone, color: 'bg-sky-500/15 text-sky-400 border-sky-500/30' }
-  ];
-
-  // Fetch all users
+  // Fetch all users (staff + patients)
   useEffect(() => {
     const q = query(
       collection(db, 'users'),
@@ -90,6 +123,14 @@ const UserManagement  = () => {
 
     return () => unsubscribe();
   }, []);
+
+  // Auto-clear success message
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(''), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   // Filter and search logic
   const filteredUsers = users.filter(user => {
@@ -113,18 +154,29 @@ const UserManagement  = () => {
   const startIndex = (currentPage - 1) * usersPerPage;
   const paginatedUsers = filteredUsers.slice(startIndex, startIndex + usersPerPage);
 
-  // Update user role
+  // Update user role — role is the single source of truth for access,
+  // isStaff is always recomputed alongside it so the two can never drift
+  // out of sync. isPatient never changes: everyone in the system, staff
+  // included, keeps their patientInfo record.
   const handleRoleUpdate = async (userId, newRole) => {
     setUpdateLoading(true);
     try {
       const userRef = doc(db, 'users', userId);
       await updateDoc(userRef, {
         role: newRole,
+        isStaff: newRole !== 'patient',
         updatedAt: serverTimestamp()
       });
+
+      await logAction('update', 'user', userId, { 
+        field: 'role', 
+        newValue: newRole 
+      });
+
       setEditingUser(null);
     } catch (err) {
       console.error('Error updating role:', err);
+      alert('Failed to update role');
     } finally {
       setUpdateLoading(false);
     }
@@ -138,61 +190,146 @@ const UserManagement  = () => {
         isActive: !currentStatus,
         updatedAt: serverTimestamp()
       });
+
+      await logAction('update', 'user', userId, { 
+        field: 'isActive', 
+        newValue: !currentStatus 
+      });
     } catch (err) {
       console.error('Error updating status:', err);
+      alert('Failed to update status');
     }
   };
 
-  // Create new user (admin creates account, no auth login)
+  // Create new staff user — uses secondary auth + creates patientInfo.
+  // Password is optional: if left blank we fall back to the same default
+  // (123456) used for patient self-registration, so both flows are
+  // consistent and the person can change it after their first login.
   const handleCreateUser = async (e) => {
     e.preventDefault();
     setCreateError('');
     setCreateLoading(true);
 
     try {
-      // Check if email already exists in users collection
-      const usersQuery = query(collection(db, 'users'), where('email', '==', createForm.email));
-      const existingUsers = await getDocs(usersQuery);
-      if (!existingUsers.empty) {
-        setCreateError('A user with this email already exists');
+      // Validate required patient info fields
+      if (!createForm.phone || !createForm.phone.trim()) {
+        setCreateError('Phone number is required.');
+        setCreateLoading(false);
+        return;
+      }
+      if (!createForm.DOB) {
+        setCreateError('Date of birth is required.');
+        setCreateLoading(false);
+        return;
+      }
+      if (!createForm.nrcNumber || !createForm.nrcNumber.trim()) {
+        setCreateError('NRC number is required.');
+        setCreateLoading(false);
+        return;
+      }
+      if (!createForm.address || !createForm.address.trim()) {
+        setCreateError('Address is required.');
+        setCreateLoading(false);
+        return;
+      }
+      if (createForm.password && createForm.password.length < 6) {
+        setCreateError('Password must be at least 6 characters, or leave it blank to use the default (123456).');
         setCreateLoading(false);
         return;
       }
 
-      // Generate a unique ID for the new user document
-      const newUserId = doc(collection(db, 'users')).id;
+      // Check if email already exists in Firestore
+      const usersQuery = query(collection(db, 'users'), where('email', '==', createForm.email));
+      const existingUsers = await getDocs(usersQuery);
+      if (!existingUsers.empty) {
+        setCreateError('A user with this email already exists in the system.');
+        setCreateLoading(false);
+        return;
+      }
 
-      // Create user document in Firestore directly (no Firebase Auth)
-      await setDoc(doc(db, 'users', newUserId), {
-        email: createForm.email,
+      const age = createForm.DOB ? calculateAge(createForm.DOB) : null;
+      const usedDefaultPassword = !createForm.password;
+      const finalPassword = createForm.password || '123456';
+
+      const staffData = {
         firstName: createForm.firstName,
         lastName: createForm.lastName,
-        fullName: `${createForm.firstName} ${createForm.lastName}`.trim(),
+        searchableName: `${createForm.firstName.toLowerCase()} ${createForm.lastName.toLowerCase()}`,
+        phone: createForm.phone || null,
         role: createForm.role,
-        isActive: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
+        DOB: createForm.DOB || null,
+        gender: createForm.gender,
+        age,
+        nrcNumber: createForm.nrcNumber || null,
+        address: createForm.address || null,
+        emergencyContactName: createForm.emergencyContactName || null,
+        emergencyContactPhone: createForm.emergencyContactPhone || null,
+      };
+
+      // registerStaff uses secondary auth — current admin stays logged in
+      const result = await registerStaff(createForm.email, finalPassword, staffData);
+
+      await logAction('create', 'staff', result.uid, {
+        name: `${createForm.firstName} ${createForm.lastName}`,
+        email: createForm.email,
+        role: createForm.role,
+        patientInfoId: result.patientInfoId,
       });
 
-      // Reset form and close modal
+      const createdName = `${createForm.firstName} ${createForm.lastName}`;
+      const createdRole = createForm.role;
+
+      // Close modal FIRST, then show success
+      setShowCreateModal(false);
+      setCreateError('');
+
+      // Reset form after modal closes
       setCreateForm({
         email: '',
         password: '',
         firstName: '',
         lastName: '',
-        role: 'receptionist'
+        role: 'receptionist',
+        phone: '',
+        DOB: '',
+        gender: 'male',
+        nrcNumber: '',
+        address: '',
+        emergencyContactName: '',
+        emergencyContactPhone: ''
       });
-      setShowCreateModal(false);
+
+      // Fixed-position toast (see render below) — always visible regardless
+      // of scroll position, so closing a scrolled-down modal never hides it.
+      setSuccessMessage(
+        `${createdName} was created successfully as ${createdRole}. ` +
+        `They can now log in with their email and ${usedDefaultPassword ? 'the default password (123456)' : 'the password you set'}.`
+      );
+
     } catch (err) {
       console.error('Error creating user:', err);
-      setCreateError('Failed to create user. Please try again.');
+
+      let errorMessage = 'Failed to create staff account. Please try again.';
+      if (err.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already registered in Firebase Authentication. Use a different email or delete the existing auth user first.';
+      } else if (err.code === 'auth/invalid-email') {
+        errorMessage = 'Invalid email address format.';
+      } else if (err.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak. Use at least 6 characters.';
+      } else if (err.code === 'auth/network-request-failed') {
+        errorMessage = 'Network error. Check your internet connection.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setCreateError(errorMessage);
     } finally {
       setCreateLoading(false);
     }
   };
 
   const getRoleConfig = (role) => {
-    return roles.find(r => r.value === role) || roles[2];
+    return allRoles.find(r => r.value === role) || patientRoleConfig;
   };
 
   const getInitials = (firstName, lastName) => {
@@ -209,23 +346,30 @@ const UserManagement  = () => {
 
   // Stats
   const getStats = () => {
-    const totalUsers = users.length;
-    const activeUsers = users.filter(u => u.isActive !== false).length;
-    const adminCount = users.filter(u => u.role === 'admin').length;
-    const doctorCount = users.filter(u => u.role === 'doctor').length;
+    const staffUsers = users.filter(u => u.isStaff === true);
+    const patientOnlyUsers = users.filter(u => u.role === 'patient');
+    const activeStaff = staffUsers.filter(u => u.isActive !== false);
+    const adminCount = staffUsers.filter(u => u.role === 'admin').length;
+    const doctorCount = staffUsers.filter(u => u.role === 'doctor').length;
 
     return [
       { 
-        title: 'Total Users', 
-        value: totalUsers.toLocaleString(), 
+        title: 'Total Staff', 
+        value: staffUsers.length.toLocaleString(), 
         icon: Users, 
         color: 'bg-violet-500/20 text-violet-400' 
       },
       { 
-        title: 'Active Users', 
-        value: activeUsers.toLocaleString(), 
+        title: 'Active Staff', 
+        value: activeStaff.length.toLocaleString(), 
         icon: UserCheck, 
         color: 'bg-emerald-500/20 text-emerald-400' 
+      },
+      { 
+        title: 'Patients', 
+        value: patientOnlyUsers.length.toLocaleString(), 
+        icon: HeartPulse, 
+        color: 'bg-rose-500/20 text-rose-400' 
       },
       { 
         title: 'Admins', 
@@ -260,14 +404,34 @@ const UserManagement  = () => {
 
   return (
     <div className="space-y-6">
+      {/* Success Toast — fixed to the viewport so it's always visible,
+          regardless of scroll position or whether a modal just closed. */}
+      {successMessage && (
+        <div className="fixed top-4 right-4 left-4 sm:left-auto z-[100] sm:max-w-md flex items-start gap-3 p-4 bg-emerald-950 border border-emerald-500/40 rounded-xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="p-2 bg-emerald-500/20 rounded-full shrink-0">
+            <PartyPopper className="w-5 h-5 text-emerald-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-emerald-300">Success!</p>
+            <p className="text-sm text-emerald-400/90">{successMessage}</p>
+          </div>
+          <button 
+            onClick={() => setSuccessMessage('')}
+            className="p-1 hover:bg-emerald-500/20 rounded-lg transition-colors shrink-0"
+          >
+            <X className="w-4 h-4 text-emerald-300" />
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-venus-text-primary">
-            Users
+            User Management
           </h1>
           <p className="text-venus-text-muted mt-1">
-            Manage user accounts, roles, and access permissions
+            Manage every account in the system — staff and patients — and change access levels.
           </p>
         </div>
         <button
@@ -275,12 +439,12 @@ const UserManagement  = () => {
           className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
         >
           <Plus className="w-4 h-4" />
-          Create User
+          Create Staff Account
         </button>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         {stats.map((stat, index) => (
           <StatCard key={index} {...stat} />
         ))}
@@ -290,10 +454,10 @@ const UserManagement  = () => {
       <div className="card">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-            {/* Role Filter */}
+            {/* Role Filter — includes Patient so you can isolate patient-only accounts */}
             <div className="flex items-center gap-2">
               <UserCog className="w-4 h-4 text-venus-text-muted" />
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 flex-wrap">
                 <button
                   onClick={() => { setRoleFilter('all'); setCurrentPage(1); }}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
@@ -304,7 +468,7 @@ const UserManagement  = () => {
                 >
                   All Roles
                 </button>
-                {roles.map((role) => (
+                {allRoles.map((role) => (
                   <button
                     key={role.value}
                     onClick={() => { setRoleFilter(role.value); setCurrentPage(1); }}
@@ -388,7 +552,7 @@ const UserManagement  = () => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-venus-text-primary">
-              User Accounts
+              All User Accounts
             </h2>
             <span className="px-2.5 py-1 bg-venus-bg-tertiary rounded-full text-xs font-medium text-venus-text-muted">
               {filteredUsers.length} users
@@ -469,7 +633,7 @@ const UserManagement  = () => {
                                 className="px-3 py-1.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary focus:outline-none focus:border-violet-500"
                                 autoFocus
                               >
-                                {roles.map((role) => (
+                                {allRoles.map((role) => (
                                   <option key={role.value} value={role.value}>
                                     {role.label}
                                   </option>
@@ -526,7 +690,7 @@ const UserManagement  = () => {
                               className="p-2 hover:bg-venus-bg-tertiary rounded-lg transition-colors text-venus-text-muted hover:text-venus-text-primary"
                               title="Edit role"
                             >
-                              <Edit3 className="w-4 h-4" />
+                              <UserCog className="w-4 h-4" />
                             </button>
                           )}
                         </td>
@@ -592,156 +756,306 @@ const UserManagement  = () => {
         )}
       </div>
 
-      {/* Create User Modal */}
+      {/* Create Staff Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-venus-border">
-              <h3 className="text-lg font-semibold text-venus-text-primary">Create New User</h3>
+          {/*
+            Layout: header (static) + body (scrollable, flex-1) + footer
+            (static, solid background). The footer is OUTSIDE the scrolling
+            area so the Cancel/Create buttons — and the error message right
+            above them — are always visible without scrolling, even on a
+            short/landscape viewport, and never have other form content
+            bleeding through behind them.
+          */}
+          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-venus-border shrink-0">
+              <div>
+                <h3 className="text-lg font-semibold text-venus-text-primary">Create New Staff Account</h3>
+                <p className="text-xs text-venus-text-muted mt-0.5">Staff are also registered as patients in the system</p>
+              </div>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
                   setCreateError('');
-                  setCreateForm({
-                    email: '',
-                    password: '',
-                    firstName: '',
-                    lastName: '',
-                    role: 'receptionist'
-                  });
                 }}
-                className="p-2 hover:bg-venus-bg-tertiary rounded-lg transition-colors"
+                className="p-2 hover:bg-venus-bg-tertiary rounded-lg transition-colors shrink-0"
               >
                 <X className="w-5 h-5 text-venus-text-muted" />
               </button>
             </div>
 
-            <form onSubmit={handleCreateUser} className="p-6 space-y-4">
-              {createError && (
-                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  {createError}
-                </div>
-              )}
+            <form onSubmit={handleCreateUser} className="flex flex-col flex-1 min-h-0">
+              {/* Scrollable body — fields only, no error banner and no
+                  buttons in here, so it can scroll freely */}
+              <div className="p-6 space-y-5 overflow-y-auto flex-1 min-h-0">
+                {/* Account Info Section */}
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-venus-text-primary flex items-center gap-2">
+                    <Shield className="w-4 h-4 text-violet-400" />
+                    Account Information
+                  </h4>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-                    First Name
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-                    <input
-                      type="text"
-                      required
-                      value={createForm.firstName}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, firstName: e.target.value }))}
-                      className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
-                      placeholder="John"
-                    />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
+                        First Name <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                        <input
+                          type="text"
+                          required
+                          value={createForm.firstName}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, firstName: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                          placeholder="John"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
+                        Last Name <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                        <input
+                          type="text"
+                          required
+                          value={createForm.lastName}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, lastName: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                          placeholder="Doe"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
+                      Email Address <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                      <input
+                        type="email"
+                        required
+                        value={createForm.email}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                        placeholder="john.doe@clinic.com"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
+                        Password <span className="text-xs font-normal text-venus-text-muted">(optional — defaults to 123456)</span>
+                      </label>
+                      <div className="relative">
+                        <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                        <input
+                          type="password"
+                          value={createForm.password}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                          placeholder="Leave blank for default"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
+                        Role <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                        <select
+                          value={createForm.role}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, role: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all appearance-none"
+                        >
+                          {roles.map((role) => (
+                            <option key={role.value} value={role.value}>
+                              {role.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-                    Last Name
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-                    <input
-                      type="text"
-                      required
-                      value={createForm.lastName}
-                      onChange={(e) => setCreateForm(prev => ({ ...prev, lastName: e.target.value }))}
-                      className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
-                      placeholder="Doe"
-                    />
+
+                {/* Divider */}
+                <div className="border-t border-venus-border/50 pt-4">
+                  <h4 className="text-sm font-semibold text-venus-text-primary flex items-center gap-2 mb-4">
+                    <HeartPulse className="w-4 h-4 text-rose-400" />
+                    Patient Information <span className="text-xs font-normal text-venus-text-muted">(Required — staff are also registered as patients)</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                        Phone Number <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                        <input
+                          type="tel"
+                          required
+                          value={createForm.phone}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, phone: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                          placeholder="+260 97 1234567"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                        NRC Number <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <Contact className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                        <input
+                          type="text"
+                          required
+                          value={createForm.nrcNumber}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, nrcNumber: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                          placeholder="123456/78/9"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                        Date of Birth <span className="text-red-400">*</span>
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+                        <input
+                          type="date"
+                          required
+                          value={createForm.DOB}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, DOB: e.target.value }))}
+                          className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                        Gender <span className="text-red-400">*</span>
+                      </label>
+                      <select
+                        required
+                        value={createForm.gender}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, gender: e.target.value }))}
+                        className="w-full px-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+                      >
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                      Address <span className="text-red-400">*</span>
+                    </label>
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 w-4 h-4 text-venus-text-muted" />
+                      <textarea
+                        rows={2}
+                        required
+                        value={createForm.address}
+                        onChange={(e) => setCreateForm(prev => ({ ...prev, address: e.target.value }))}
+                        className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all resize-none"
+                        placeholder="123 Main Street, Kitwe"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="border border-venus-border rounded-lg p-4 space-y-4 mt-4">
+                    <h5 className="text-xs font-medium text-venus-text-muted">Emergency Contact (Optional)</h5>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-venus-text-muted mb-1">Name</label>
+                        <input
+                          type="text"
+                          value={createForm.emergencyContactName}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, emergencyContactName: e.target.value }))}
+                          className="w-full px-3 py-2 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500"
+                          placeholder="Contact name"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-venus-text-muted mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          value={createForm.emergencyContactPhone}
+                          onChange={(e) => setCreateForm(prev => ({ ...prev, emergencyContactPhone: e.target.value }))}
+                          className="w-full px-3 py-2 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500"
+                          placeholder="+260 97 1234567"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-                  Email Address
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-                  <input
-                    type="email"
-                    required
-                    value={createForm.email}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
-                    placeholder="john.doe@clinic.com"
-                  />
-                </div>
-              </div>
+              {/* Static footer — solid background, sits below the scroll
+                  area, always visible. Error appears here, directly above
+                  the buttons, so it's never missed on a short viewport. */}
+              <div className="shrink-0 border-t border-venus-border bg-white dark:bg-gray-900 px-6 py-4 space-y-3">
+                {createError && (
+                  <div className="flex items-start gap-3 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400">
+                    <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-red-300">Error</p>
+                      <p className="text-sm text-red-400/90">{createError}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCreateError('')}
+                      className="p-1 hover:bg-red-500/20 rounded-lg transition-colors shrink-0"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
-              <div>
-                <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-                  Password
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-                  <input
-                    type="password"
-                    required
-                    minLength={6}
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
-                    placeholder="Min. 6 characters"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-                  Role
-                </label>
-                <div className="relative">
-                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-                  <select
-                    value={createForm.role}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, role: e.target.value }))}
-                    className="w-full pl-10 pr-4 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all appearance-none"
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCreateModal(false);
+                      setCreateError('');
+                    }}
+                    className="flex-1 px-4 py-2.5 border border-venus-border text-venus-text-primary rounded-lg text-sm font-medium hover:bg-venus-bg-elevated transition-all"
                   >
-                    {roles.map((role) => (
-                      <option key={role.value} value={role.value}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </select>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={createLoading}
+                    className="flex-1 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {createLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Creating Account...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" />
+                        Create Staff Account
+                      </>
+                    )}
+                  </button>
                 </div>
-              </div>
-
-              <div className="pt-2 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowCreateModal(false);
-                    setCreateError('');
-                  }}
-                  className="flex-1 px-4 py-2.5 border border-venus-border text-venus-text-primary rounded-lg text-sm font-medium hover:bg-venus-bg-elevated transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={createLoading}
-                  className="flex-1 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {createLoading ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="w-4 h-4" />
-                      Create User
-                    </>
-                  )}
-                </button>
               </div>
             </form>
           </div>
@@ -751,4 +1065,4 @@ const UserManagement  = () => {
   );
 };
 
-export default UserManagement ;
+export default UserManagement;

@@ -24,10 +24,7 @@ const PlaceholderPage = ({ title }) => (
   </div>
 );
 
-const AppointmentSchedule = () => <PlaceholderPage title="Appointments" />;
-const MedicalRecords = () => <PlaceholderPage title="Medical Records" />;
 const Invoices = () => <PlaceholderPage title="Billing & Invoices" />;
-
 
 function App() {
   return (
@@ -47,11 +44,11 @@ function App() {
               </ProtectedRoute>
             }>
               <Route path="/dashboard" element={<UnifiedDashboard />} />
-              
-              {/* Patient Routes */}
+
+              {/* Patient Routes - All authenticated users */}
               <Route path="/patients" element={<PatientList />} />
               <Route path="/patients/:id" element={<PatientDetails />} />
-              
+
               {/* Appointment Routes */}
               <Route path="/appointments" element={<AppointmentsPage />} />
               <Route path="/appointments/walk-in" element={
@@ -59,36 +56,38 @@ function App() {
                   <WalkInRegistration />
                 </ProtectedRoute>
               } />
-              
+
               {/* Medical Records Routes */}
               <Route path="/medical-records" element={
-                <ProtectedRoute allowedRoles={['admin', 'doctor', 'nurse', 'patient']}>
+                <ProtectedRoute allowedRoles={['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']}>
                   <MedicalRecordsList />
                 </ProtectedRoute>
               } />
               <Route path="/medical-records/create" element={
-                <ProtectedRoute allowedRoles={['admin', 'doctor']}>
+                <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
                   <CreateMedicalRecord />
                 </ProtectedRoute>
               } />
-              <Route path="/medical-records/:id" element={
-                <ProtectedRoute allowedRoles={['admin', 'doctor', 'nurse', 'patient']}>
+              <Route path="/medical-records/:patientId/:recordId" element={
+                <ProtectedRoute allowedRoles={['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']}>
                   <MedicalRecordDetails />
                 </ProtectedRoute>
               } />
-              
+
+              {/* Billing Route */}
               <Route path="/billing" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
                   <Invoices />
                 </ProtectedRoute>
               } />
-              
+
+              {/* Admin Routes */}
               <Route path="/admin/users" element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <UserManagement />
                 </ProtectedRoute>
               } />
-              
+
               <Route path="/admin/audit" element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AuditLogs />
