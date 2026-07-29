@@ -91,13 +91,18 @@ export const getStaffByRole = async (role, maxResults = 50) => {
 // ============================================
 // PATIENT SEARCH
 // ============================================
+// NOTE: isPatient (not role) is the correct field to filter on. Staff who
+// are also registered as patients keep their staff role (doctor, nurse,
+// receptionist, etc.) and are identified only by isPatient: true — the same
+// field PatientList already queries on. Filtering by role == 'patient' here
+// silently excluded every staff-patient from search results.
 export const searchPatients = async (searchTerm, maxResults = 20) => {
   const term = searchTerm.toLowerCase().trim();
   if (!term) return [];
 
   const q = query(
     collection(db, 'users'),
-    where('role', '==', 'patient'),
+    where('isPatient', '==', true),
     where('searchableName', '>=', term),
     where('searchableName', '<=', term + '\uf8ff'),
     limit(maxResults)
@@ -110,7 +115,7 @@ export const searchPatients = async (searchTerm, maxResults = 20) => {
 export const searchPatientsByPhone = async (phone) => {
   const q = query(
     collection(db, 'users'),
-    where('role', '==', 'patient'),
+    where('isPatient', '==', true),
     where('phone', '==', phone),
     limit(1)
   );

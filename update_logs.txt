@@ -8,6 +8,11 @@ Main Working Changes
 5. Completed Medical Records to be completed by all staff based on thier role.
 6. Improved the login to remove the Race Codition between firebase and the protectedRoute 
 7. Removed tab for Billing and Walk-in 
+8. Improved the UI for light and dark theme
+9. Added my health for patients to see thier own records
+10. Cleaned the Unified dashboard to remove dummy data
+11. Added shimmer loading for app skeleton and other pages for smooth loading animations
+12. Removed loading spinner & Modal files  
 
 =======================================================================================================
 ========================== Code Update 19.05.26 - Daniel Mundemba =====================================

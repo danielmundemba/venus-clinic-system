@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { onAuthChange, getUserRole } from '../firebase/auth';
+import AppShellSkeleton from '../components/common/AppShellSkeleton';
 
 const AuthContext = createContext();
 
@@ -24,7 +25,7 @@ export const AuthProvider = ({ children }) => {
             email: firebaseUser.email,
             displayName: firebaseUser.displayName,
             role,
-            patientId: firebaseUser.uid, // If user is patient, their uid is their patientId
+            patientId: firebaseUser.uid,
           });
           setUserRole(role);
         } else {
@@ -58,13 +59,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? (
-        <div className="min-h-screen bg-venus-bg-primary flex items-center justify-center">
-          <div className="w-10 h-10 border-4 border-venus-border border-t-venus-primary rounded-full animate-spin" />
-        </div>
-      ) : (
-        children
-      )}
+      {loading ? <AppShellSkeleton /> : children}
     </AuthContext.Provider>
   );
 };

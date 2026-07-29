@@ -9,29 +9,22 @@ export const useTheme = () => {
 };
 
 export const ThemeProvider = ({ children }) => {
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
+  const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('venus-theme');
-    if (saved) {
-      setIsDark(saved === 'dark');
-    } else {
-      setIsDark(false);
-      localStorage.setItem('venus-theme', 'light');
-    }
-  }, []);
+    if (saved) return saved === 'dark';
+    return false; // default: light
+  });
 
   useEffect(() => {
     if (isDark) {
       document.documentElement.classList.add('dark');
-      localStorage.setItem('venus-theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
-      localStorage.setItem('venus-theme', 'light');
     }
+    localStorage.setItem('venus-theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
-  const toggleTheme = () => setIsDark(!isDark);
+  const toggleTheme = () => setIsDark(prev => !prev);
 
   return (
     <ThemeContext.Provider value={{ isDark, toggleTheme }}>

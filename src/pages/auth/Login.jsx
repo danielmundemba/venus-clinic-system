@@ -15,7 +15,7 @@ const loginSchema = z.object({
 
 const Login = () => {
   const navigate = useNavigate();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, userRole, loading: authLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -30,11 +30,13 @@ const Login = () => {
 
   // Redirect reactively once AuthContext confirms the user + role are resolved.
   // Do NOT navigate() from onSubmit — it races onAuthStateChanged/getUserRole.
+  // Patients land on their own dashboard, not the staff one — /dashboard is
+  // staff-only now, so sending a patient there was leaving them on a blank page.
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigate('/dashboard', { replace: true });
+      navigate(userRole === 'patient' ? '/my-health' : '/dashboard', { replace: true });
     }
-  }, [authLoading, isAuthenticated, navigate]);
+  }, [authLoading, isAuthenticated, userRole, navigate]);
 
   const onSubmit = async (data) => {
     setSubmitting(true);

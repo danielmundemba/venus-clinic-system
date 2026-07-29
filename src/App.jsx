@@ -1,19 +1,40 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './context/AuthContext';
+import { Suspense, lazy } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import ProtectedRoute from './components/common/ProtectedRoute';
 import AuthLayout from './components/layout/AuthLayout';
 import DashboardLayout from './components/layout/DashboardLayout';
+import PageSkeleton from './components/common/PageSkeleton';
 import Login from './pages/auth/Login';
-import UnifiedDashboard from './pages/dashboard/UnifiedDashboard';
-import PatientList from './pages/patients/PatientList';
-import PatientDetails from './pages/patients/PatientDetails';
-import AppointmentsPage from './pages/appointments/AppointmentsPage';
-import AuditLogs from './pages/admin/Auditlogs';
-import MedicalRecordsList from './pages/medical-records/MedicalRecordsList';
-import CreateMedicalRecord from './pages/medical-records/CreateMedicalRecord';
-import MedicalRecordDetails from './pages/medical-records/MedicalRecordDetails';
-import UserManagement from './pages/admin/UserManagement';
+
+// Lazy-loaded pages — each becomes its own JS chunk
+const UnifiedDashboard = lazy(() => import('./pages/dashboard/UnifiedDashboard'));
+const PatientList = lazy(() => import('./pages/patients/PatientList'));
+const PatientDetails = lazy(() => import('./pages/patients/PatientDetails'));
+const AppointmentsPage = lazy(() => import('./pages/appointments/AppointmentsPage'));
+const AuditLogs = lazy(() => import('./pages/admin/Auditlogs'));
+const MedicalRecordsList = lazy(() => import('./pages/medical-records/MedicalRecordsList'));
+const CreateMedicalRecord = lazy(() => import('./pages/medical-records/CreateMedicalRecord'));
+const MedicalRecordDetails = lazy(() => import('./pages/medical-records/MedicalRecordDetails'));
+const UserManagement = lazy(() => import('./pages/admin/UserManagement'));
+const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
+
+// My-Health
+const MyDashboard = lazy(() => import('./pages/profile/MyDashboard'));
+const MyRecordsBilling = lazy(() => import('./pages/profile/MyRecordsBilling'));
+
+// Every staff role that should ever see the operational side of the app.
+// Kept as one constant so /dashboard and friends can't drift out of sync.
+const STAFF_ROLES = ['admin', 'doctor', 'receptionist', 'nurse', 'pharmacist'];
+
+// "/" and unmatched paths both need to land somewhere sensible per role —
+// a patient should never be sent toward /dashboard, even transiently.
+const RoleAwareRedirect = () => {
+  const { userRole, loading } = useAuth();
+  if (loading) return null;
+  return <Navigate to={userRole === 'patient' ? '/my-health' : '/dashboard'} replace />;
+};
 
 function App() {
   return (
@@ -21,57 +42,107 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* Auth Routes */}
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<Login />} />
             </Route>
 
-            {/* Dashboard Routes */}
             <Route element={
               <ProtectedRoute>
                 <DashboardLayout />
               </ProtectedRoute>
             }>
-              <Route path="/dashboard" element={<UnifiedDashboard />} />
+              <Route path="/dashboard" element={
+                <ProtectedRoute allowedRoles={STAFF_ROLES}>
+                  <Suspense fallback={<PageSkeleton variant="dashboard" />}>
+                    <UnifiedDashboard />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
 
-              {/* Patient Routes - All authenticated users */}
-              <Route path="/patients" element={<PatientList />} />
-              <Route path="/patients/:id" element={<PatientDetails />} />
+              <Route path="/patients" element={
+                <ProtectedRoute allowedRoles={STAFF_ROLES}>
+                  <Suspense fallback={<PageSkeleton variant="table" />}>
+                    <PatientList />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+              <Route path="/patients/:id" element={
+                <ProtectedRoute allowedRoles={STAFF_ROLES}>
+                  <Suspense fallback={<PageSkeleton variant="detail" />}>
+                    <PatientDetails />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
 
-              {/* Medical Records Routes */}
               <Route path="/medical-records" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']}>
-                  <MedicalRecordsList />
+                  <Suspense fallback={<PageSkeleton variant="table" />}>
+                    <MedicalRecordsList />
+                  </Suspense>
                 </ProtectedRoute>
               } />
               <Route path="/medical-records/create" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist']}>
-                  <CreateMedicalRecord />
+                  <Suspense fallback={<PageSkeleton variant="form" />}>
+                    <CreateMedicalRecord />
+                  </Suspense>
                 </ProtectedRoute>
               } />
               <Route path="/medical-records/:patientId/:recordId" element={
                 <ProtectedRoute allowedRoles={['admin', 'receptionist', 'nurse', 'doctor', 'pharmacist']}>
-                  <MedicalRecordDetails />
+                  <Suspense fallback={<PageSkeleton variant="detail" />}>
+                    <MedicalRecordDetails />
+                  </Suspense>
                 </ProtectedRoute>
               } />
 
-              {/* Admin Routes */}
+              <Route path="/appointments" element={
+                <ProtectedRoute allowedRoles={['admin', 'doctor', 'receptionist', 'nurse']}>
+                  <Suspense fallback={<PageSkeleton variant="table" />}>
+                    <AppointmentsPage />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+
               <Route path="/admin/users" element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <UserManagement />
+                  <Suspense fallback={<PageSkeleton variant="table" />}>
+                    <UserManagement />
+                  </Suspense>
                 </ProtectedRoute>
               } />
-
               <Route path="/admin/audit" element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <AuditLogs />
+                  <Suspense fallback={<PageSkeleton variant="table" />}>
+                    <AuditLogs />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<PageSkeleton variant="detail" />}>
+                    <ProfilePage />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+              <Route path="/my-health" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<PageSkeleton variant="dashboard" />}>
+                    <MyDashboard />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+              <Route path="/my-records" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<PageSkeleton variant="table" />}>
+                    <MyRecordsBilling />
+                  </Suspense>
                 </ProtectedRoute>
               } />
             </Route>
 
-            {/* Redirects */}
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<RoleAwareRedirect />} />
+            <Route path="*" element={<RoleAwareRedirect />} />
           </Routes>
         </Router>
       </AuthProvider>

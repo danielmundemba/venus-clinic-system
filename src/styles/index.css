@@ -1,11 +1,8 @@
-/* Tailwind Directives First */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* CSS Variables for Theme */
 :root {
-  /* Venus Light Theme Variables (Default) - Opposite of Dark */
   --venus-bg-primary: #F4F8FC;
   --venus-bg-secondary: #EAF2F9;
   --venus-bg-tertiary: #DFE9F3;
@@ -26,7 +23,6 @@
   --venus-border-focus: #0EA5E9;
 }
 
-/* Dark Theme */
 .dark {
   --venus-bg-primary: #0B1120;
   --venus-bg-secondary: #151E32;
@@ -49,36 +45,19 @@
 }
 
 @layer base {
-  html {
-    @apply antialiased;
-  }
-  
+  html { @apply antialiased; }
+
   body {
     background-color: var(--venus-bg-primary);
     color: var(--venus-text-primary);
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
   }
 
-  /* Custom scrollbar */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background-color: var(--venus-bg-primary); }
+  ::-webkit-scrollbar-thumb { background-color: var(--venus-bg-tertiary); border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--venus-border-hover); }
 
-  ::-webkit-scrollbar-track {
-    background-color: var(--venus-bg-primary);
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background-color: var(--venus-bg-tertiary);
-    border-radius: 9999px;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background-color: var(--venus-border-hover);
-  }
-
-  /* Focus styles */
   *:focus-visible {
     outline: none;
     box-shadow: 0 0 0 2px var(--venus-primary-500), 0 0 0 4px var(--venus-bg-primary);
@@ -98,18 +77,11 @@
     background-color: var(--venus-bg-tertiary);
     border: 1px solid var(--venus-border-default);
     border-radius: 0.5rem;
-    padding-left: 1rem;
-    padding-right: 1rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
+    padding: 0.75rem 1rem;
     color: var(--venus-text-primary);
     transition: all 0.2s;
   }
-
-  .input-field::placeholder {
-    color: var(--venus-text-muted);
-  }
-
+  .input-field::placeholder { color: var(--venus-text-muted); }
   .input-field:focus {
     outline: none;
     border-color: var(--venus-primary-500);
@@ -117,72 +89,63 @@
   }
 
   .btn-primary {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
+    padding: 0.75rem 1.5rem;
     background-color: var(--venus-primary-500);
     color: white;
     font-weight: 500;
     border-radius: 0.5rem;
-    transition: all 0.2s;
-    box-shadow: 0 0 20px rgba(14, 165, 233, 0.15);
     border: none;
     cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 20px rgba(14, 165, 233, 0.15);
   }
-
   .btn-primary:hover:not(:disabled) {
     background-color: var(--venus-primary-600);
     box-shadow: 0 0 30px rgba(14, 165, 233, 0.2);
   }
-
-  .btn-primary:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 
   .btn-secondary {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
+    padding: 0.75rem 1.5rem;
     background-color: var(--venus-bg-tertiary);
     color: var(--venus-text-primary);
     font-weight: 500;
     border-radius: 0.5rem;
     border: 1px solid var(--venus-border-default);
-    transition: all 0.2s;
     cursor: pointer;
+    transition: all 0.2s;
   }
-
-  .btn-secondary:hover {
-    background-color: var(--venus-bg-elevated);
-  }
+  .btn-secondary:hover { background-color: var(--venus-bg-elevated); }
 
   .btn-danger {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
+    padding: 0.75rem 1.5rem;
     background-color: rgba(220, 38, 38, 0.1);
     color: var(--venus-danger);
     font-weight: 500;
     border-radius: 0.5rem;
     border: 1px solid rgba(220, 38, 38, 0.3);
-    transition: all 0.2s;
     cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-danger:hover { background-color: rgba(220, 38, 38, 0.2); }
+
+  .logo-bg { background-color: #0EA5E9 !important; color: white; }
+  .logo-icon { color: white !important; 
   }
 
-  .btn-danger:hover {
-    background-color: rgba(220, 38, 38, 0.2);
+    .skeleton-shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--venus-bg-tertiary) 25%,
+      var(--venus-bg-elevated) 50%,
+      var(--venus-bg-tertiary) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
   }
 
-  .logo-bg {
-    background-color: #0EA5E9 !important;
-    color: white;
-  }
-
-  .logo-icon {
-    color: white !important;
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
   }
 }
