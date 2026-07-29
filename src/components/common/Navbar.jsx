@@ -142,12 +142,6 @@ const Navbar = () => {
           {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
 
-        {/* Notifications */}
-        <button className="relative p-2 text-venus-text-secondary hover:text-venus-text-primary hover:bg-venus-bg-tertiary rounded-lg transition-all">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-venus-danger rounded-full"></span>
-        </button>
-
         {/* Role badge */}
         <span className={`px-3 py-1 text-xs font-medium rounded-full border capitalize ${ROLE_COLORS[userRole] || ''}`}>
           {userRole}
