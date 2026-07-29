@@ -322,15 +322,6 @@ const AppointmentList = ({
                       <Clock className="w-3 h-3" />
                       {appointment.duration || 30} min
                     </span>
-                    <span className={`
-                      text-xs px-2 py-0.5 rounded-full
-                      ${appointment.type === 'walk-in' 
-                        ? 'bg-venus-info/10 text-venus-info' 
-                        : 'bg-venus-primary-500/10 text-venus-primary-400'
-                      }
-                    `}>
-                      {appointment.type === 'walk-in' ? 'Walk-in' : 'Scheduled'}
-                    </span>
                   </div>
                   {appointment.notes && (
                     <p className="text-xs text-venus-text-muted mt-2 truncate">

@@ -12,9 +12,7 @@ import {
   AlertCircle,
   User
 } from 'lucide-react';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../firebase/config';
-import { useAuth } from '../../context/AuthContext';
+import { getStaffByRole, searchPatients } from '../../firebase/db';
 
 const appointmentSchema = z.object({
   patientId: z.string().min(1, 'Patient is required'),
@@ -23,7 +21,6 @@ const appointmentSchema = z.object({
   date: z.string().min(1, 'Date is required'),
   time: z.string().min(1, 'Time is required'),
   duration: z.number().min(5).max(240).default(30),
-  type: z.enum(['scheduled', 'walk-in']),
   notes: z.string().max(500, 'Notes must be under 500 characters').optional()
 });
 
@@ -35,7 +32,6 @@ const CreateAppointmentModal = ({
   initialPatient = null,
   loading = false
 }) => {
-  const { user } = useAuth();
   const [doctors, setDoctors] = useState([]);
   const [patients, setPatients] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,32 +45,27 @@ const CreateAppointmentModal = ({
     register,
     handleSubmit,
     setValue,
-    watch,
     reset,
     formState: { errors }
   } = useForm({
     resolver: zodResolver(appointmentSchema),
     defaultValues: {
       duration: 30,
-      type: 'scheduled',
       date: new Date().toISOString().split('T')[0],
       time: '09:00',
       notes: ''
     }
   });
 
-  const watchType = watch('type');
-
-  // Fetch doctors
+  // Doctors are staff users with role === 'doctor', not a separate collection.
   useEffect(() => {
     if (!isOpen) return;
 
     const fetchDoctors = async () => {
       setFetchingDoctors(true);
       try {
-        const q = query(collection(db, 'doctors'), orderBy('lastName'));
-        const snapshot = await getDocs(q);
-        setDoctors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const staffDoctors = await getStaffByRole('doctor');
+        setDoctors(staffDoctors);
       } catch (err) {
         console.error('Error fetching doctors:', err);
       } finally {
@@ -85,9 +76,10 @@ const CreateAppointmentModal = ({
     fetchDoctors();
   }, [isOpen]);
 
-  // Fetch patients for search
+  // Patients live in `users` with isPatient: true — searched the same way
+  // PatientList/searchPatients already do it, not a separate collection.
   useEffect(() => {
-    if (!isOpen || !showPatientSearch || searchQuery.length < 2) {
+    if (!isOpen || !showPatientSearch || searchQuery.trim().length < 2) {
       setPatients([]);
       return;
     }
@@ -95,15 +87,8 @@ const CreateAppointmentModal = ({
     const fetchPatients = async () => {
       setFetchingPatients(true);
       try {
-        // Simple query - get all and filter client-side to avoid index issues
-        const q = query(collection(db, 'patients'), orderBy('lastName'));
-        const snapshot = await getDocs(q);
-        const allPatients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        const filtered = allPatients.filter(p => {
-          const fullName = `${p.firstName || ''} ${p.lastName || ''} ${p.phone || ''}`.toLowerCase();
-          return fullName.includes(searchQuery.toLowerCase());
-        }).slice(0, 10);
-        setPatients(filtered);
+        const results = await searchPatients(searchQuery);
+        setPatients(results.slice(0, 10));
       } catch (err) {
         console.error('Error fetching patients:', err);
         setPatients([]);
@@ -257,7 +242,7 @@ const CreateAppointmentModal = ({
                         </div>
                       ) : patients.length === 0 ? (
                         <div className="p-4 text-center text-sm text-venus-text-muted">
-                          {searchQuery.length < 2 ? 'Type at least 2 characters' : 'No patients found'}
+                          {searchQuery.trim().length < 2 ? 'Type at least 2 characters' : 'No patients found'}
                         </div>
                       ) : (
                         patients.map(patient => (
@@ -304,8 +289,8 @@ const CreateAppointmentModal = ({
                 <option value="">{fetchingDoctors ? 'Loading doctors...' : 'Select a doctor'}</option>
                 {doctors.map(doc => (
                   <option key={doc.id} value={doc.id}>
-                    Dr. {doc.firstName || ''} {doc.lastName || ''} 
-                    {doc.specialization ? `(${doc.specialization})` : ''}
+                    Dr. {doc.firstName || ''} {doc.lastName || ''}
+                    {doc.specialization ? ` (${doc.specialization})` : ''}
                   </option>
                 ))}
               </select>
@@ -373,58 +358,6 @@ const CreateAppointmentModal = ({
                 <option value={90}>1.5 hours</option>
                 <option value={120}>2 hours</option>
               </select>
-            </div>
-          </div>
-
-          {/* Type */}
-          <div>
-            <label className="block text-sm font-medium text-venus-text-primary mb-2">
-              Appointment Type
-            </label>
-            <div className="flex gap-3">
-              <label className={`
-                flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all
-                ${watchType === 'scheduled' 
-                  ? 'border-venus-primary-400 bg-venus-primary-500/10' 
-                  : 'border-venus-border bg-venus-bg-secondary hover:border-venus-border-hover'
-                }
-              `}>
-                <input
-                  type="radio"
-                  value="scheduled"
-                  {...register('type')}
-                  className="sr-only"
-                />
-                <Calendar className={`w-5 h-5 ${watchType === 'scheduled' ? 'text-venus-primary-400' : 'text-venus-text-muted'}`} />
-                <div>
-                  <p className={`text-sm font-medium ${watchType === 'scheduled' ? 'text-venus-primary-400' : 'text-venus-text-primary'}`}>
-                    Scheduled
-                  </p>
-                  <p className="text-xs text-venus-text-muted">Standard appointment</p>
-                </div>
-              </label>
-
-              <label className={`
-                flex-1 flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all
-                ${watchType === 'walk-in' 
-                  ? 'border-venus-info bg-venus-info/10' 
-                  : 'border-venus-border bg-venus-bg-secondary hover:border-venus-border-hover'
-                }
-              `}>
-                <input
-                  type="radio"
-                  value="walk-in"
-                  {...register('type')}
-                  className="sr-only"
-                />
-                <Clock className={`w-5 h-5 ${watchType === 'walk-in' ? 'text-venus-info' : 'text-venus-text-muted'}`} />
-                <div>
-                  <p className={`text-sm font-medium ${watchType === 'walk-in' ? 'text-venus-info' : 'text-venus-text-primary'}`}>
-                    Walk-in
-                  </p>
-                  <p className="text-xs text-venus-text-muted">Auto check-in on creation</p>
-                </div>
-              </label>
             </div>
           </div>
 

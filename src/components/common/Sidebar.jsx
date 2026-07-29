@@ -66,6 +66,11 @@ const personalNavItems = [
     icon: HeartPulse,
   },
   {
+    path: '/my-appointments',
+    label: 'My Appointments',
+    icon: CalendarDays,
+  },
+  {
     path: '/my-records',
     label: 'My Records & Billing',
     icon: Receipt,

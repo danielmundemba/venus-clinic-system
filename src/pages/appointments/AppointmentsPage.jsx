@@ -13,11 +13,10 @@ import {
   FileText,
   AlertCircle
 } from 'lucide-react';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useAppointments } from '../../hooks/useAppointments';
 import { useAuditLog } from '../../hooks/useAuditLog';
+import { getStaffByRole } from '../../firebase/db';
 import AppointmentCalendar from '../../components/appointments/AppointmentCalendar';
 import AppointmentList from '../../components/appointments/AppointmentList';
 import CreateAppointmentModal from '../../components/appointments/CreateAppointmentModal';
@@ -65,16 +64,14 @@ const AppointmentsPage = () => {
   const [filters, setFilters] = useState({});
   const [pageError, setPageError] = useState(null);
 
-  // Load doctors once on mount
+  // Doctors are staff users with role === 'doctor' in `users`, not a
+  // separate `doctors` collection.
   useEffect(() => {
     let mounted = true;
     const loadDoctors = async () => {
       try {
-        const q = query(collection(db, 'doctors'), orderBy('lastName'));
-        const snapshot = await getDocs(q);
-        if (mounted) {
-          setDoctors(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        }
+        const staffDoctors = await getStaffByRole('doctor');
+        if (mounted) setDoctors(staffDoctors);
       } catch (err) {
         console.error('Error loading doctors:', err);
         if (mounted) setPageError('Failed to load doctors: ' + err.message);
@@ -124,7 +121,7 @@ const AppointmentsPage = () => {
       await logAction({
         action: 'CREATE_APPOINTMENT',
         targetId: result.id,
-        details: `Created ${formData.type} appointment for patient ${formData.patientName}`
+        details: `Created appointment for patient ${formData.patientName}`
       });
 
       setShowCreateModal(false);
@@ -345,18 +342,7 @@ const AppointmentsPage = () => {
       >
         {selectedAppointment && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <StatusBadge status={selectedAppointment.status} size="md" />
-              <span className={`
-                text-xs px-2 py-1 rounded-full
-                ${selectedAppointment.type === 'walk-in' 
-                  ? 'bg-venus-info/10 text-venus-info' 
-                  : 'bg-venus-primary-500/10 text-venus-primary-400'
-                }
-              `}>
-                {selectedAppointment.type === 'walk-in' ? 'Walk-in' : 'Scheduled'}
-              </span>
-            </div>
+            <StatusBadge status={selectedAppointment.status} size="md" />
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-venus-bg-tertiary p-3 rounded-lg">

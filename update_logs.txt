@@ -13,6 +13,7 @@ Main Working Changes
 10. Cleaned the Unified dashboard to remove dummy data
 11. Added shimmer loading for app skeleton and other pages for smooth loading animations
 12. Removed loading spinner & Modal files  
+13. Redid Appointments to fit to the new structure
 
 =======================================================================================================
 ========================== Code Update 19.05.26 - Daniel Mundemba =====================================

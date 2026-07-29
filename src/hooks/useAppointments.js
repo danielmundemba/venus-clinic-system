@@ -65,9 +65,6 @@ export const useAppointments = () => {
       }));
 
       // Client-side filtering for remaining filters
-      if (filters.type) {
-        data = data.filter(a => a.type === filters.type);
-      }
       if (filters.startDate) {
         const start = new Date(filters.startDate);
         data = data.filter(a => {
@@ -193,7 +190,9 @@ export const useAppointments = () => {
     }
   }, []);
 
-  // Create appointment
+  // Create appointment — every appointment is scheduled; there's no
+  // walk-in type anymore. A visit record is created separately, at
+  // reception, when the patient actually arrives.
   const createAppointment = useCallback(async (appointmentData) => {
     setLoading(true);
     setError(null);
@@ -222,9 +221,8 @@ export const useAppointments = () => {
         date: Timestamp.fromDate(dateObj),
         time: appointmentData.time || '09:00',
         duration: appointmentData.duration || 30,
-        type: appointmentData.type || 'scheduled',
         notes: appointmentData.notes || '',
-        status: appointmentData.type === 'walk-in' ? 'checked-in' : 'pending',
+        status: 'pending',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         createdBy: user?.uid || user?.id || 'unknown'

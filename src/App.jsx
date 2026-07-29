@@ -22,6 +22,7 @@ const ProfilePage = lazy(() => import('./pages/profile/ProfilePage'));
 
 // My-Health
 const MyDashboard = lazy(() => import('./pages/profile/MyDashboard'));
+const MyAppointments = lazy(() => import('./pages/profile/MyAppointments'));
 const MyRecordsBilling = lazy(() => import('./pages/profile/MyRecordsBilling'));
 
 // Every staff role that should ever see the operational side of the app.
@@ -129,6 +130,13 @@ function App() {
                 <ProtectedRoute>
                   <Suspense fallback={<PageSkeleton variant="dashboard" />}>
                     <MyDashboard />
+                  </Suspense>
+                </ProtectedRoute>
+              } />
+              <Route path="/my-appointments" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<PageSkeleton variant="table" />}>
+                    <MyAppointments />
                   </Suspense>
                 </ProtectedRoute>
               } />
