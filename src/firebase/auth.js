@@ -3,8 +3,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updateProfile
+  updateProfile, 
 } from 'firebase/auth';
+import { generatePatientNumber } from './db';
 import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
 import app from './config';           // Default import
 import { auth, db } from './config';  // Named imports
@@ -120,14 +121,18 @@ export const registerPatient = async (email, password, patientData) => {
       displayName: `${patientData.firstName} ${patientData.lastName}`
     });
 
+    const patientNumber = await generatePatientNumber();
+
     await setDoc(doc(db, 'users', uid), {
       firstName: patientData.firstName,
       lastName: patientData.lastName,
       fullName: `${patientData.firstName} ${patientData.lastName}`,
+      patientNumber,   
       searchableName: patientData.searchableName || 
         `${patientData.firstName.toLowerCase()} ${patientData.lastName.toLowerCase()}`,
       email,
       phone: patientData.phone,
+      allergies: patientData.allergies || null,   
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       role: 'patient',

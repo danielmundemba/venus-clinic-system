@@ -1,4 +1,4 @@
-const Bar = ({ w = 'w-full', h = 'h-4', className = '' }) => (
+const Bar = ({ w = "w-full", h = "h-4", className = "" }) => (
   <div className={`${w} ${h} rounded-md skeleton-shimmer ${className}`} />
 );
 

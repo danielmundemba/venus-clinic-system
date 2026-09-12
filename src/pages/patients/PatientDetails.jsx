@@ -1,17 +1,23 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
-import { useAuth } from '../../context/AuthContext';
-import { getPatientInfo, getPatientMedicalRecords, getActivePatientRecord, createMedicalRecord } from '../../firebase/db';
-import { formatDate, calculateAge, formatPhone } from '../../utils/formatters';
-import { 
-  ArrowLeft, 
-  User, 
-  Phone, 
-  Mail, 
-  MapPin, 
-  Calendar, 
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../firebase/config";
+import { useAuth } from "../../context/AuthContext";
+import {
+  getPatientInfo,
+  getPatientMedicalRecords,
+  getActivePatientRecord,
+  createMedicalRecord,
+  getMedications,
+} from "../../firebase/db";
+import { formatDate, calculateAge, formatPhone } from "../../utils/formatters";
+import {
+  ArrowLeft,
+  User,
+  Phone,
+  Mail,
+  MapPin,
+  Calendar,
   FileText,
   Activity,
   Shield,
@@ -22,8 +28,20 @@ import {
   Contact,
   Stethoscope,
   Pill,
-  Eye
-} from 'lucide-react';
+  Eye,
+} from "lucide-react";
+
+const [medicationCatalog, setMedicationCatalog] = useState([]);
+
+const emptyMedication = {
+  medicationId: "",
+  name: "",
+  dosage: "",
+  quantity: "",
+  instructions: "",
+  unitPrice: "",
+  price: "",
+};
 
 const PatientDetails = () => {
   const { id } = useParams();
@@ -44,11 +62,11 @@ const PatientDetails = () => {
   const loadPatient = async () => {
     setLoading(true);
     try {
-      const userDocRef = doc(db, 'users', id);
+      const userDocRef = doc(db, "users", id);
       const userDoc = await getDoc(userDocRef);
 
       if (!userDoc.exists()) {
-        navigate('/patients');
+        navigate("/patients");
         return;
       }
 
@@ -58,8 +76,8 @@ const PatientDetails = () => {
       const info = await getPatientInfo(id);
       setPatientInfo(info);
     } catch (error) {
-      console.error('Failed to load patient:', error);
-      navigate('/patients');
+      console.error("Failed to load patient:", error);
+      navigate("/patients");
     } finally {
       setLoading(false);
     }
@@ -68,16 +86,16 @@ const PatientDetails = () => {
   const loadPastRecords = async () => {
     setLoadingRecords(true);
     try {
-      const records = await getPatientMedicalRecords(id, 'completed');
+      const records = await getPatientMedicalRecords(id, "completed");
       setPastRecords(records);
     } catch (error) {
-      console.error('Failed to load past medical records:', error);
+      console.error("Failed to load past medical records:", error);
     } finally {
       setLoadingRecords(false);
     }
   };
 
-  const canCreateVisit = () => ['admin', 'receptionist'].includes(userRole);
+  const canCreateVisit = () => ["admin", "receptionist"].includes(userRole);
 
   const handleCreateVisit = async () => {
     setStartingVisit(true);
@@ -91,13 +109,13 @@ const PatientDetails = () => {
       }
 
       const result = await createMedicalRecord(id, {
-        notes: '',
+        notes: "",
         checkedInBy: user?.displayName || user?.email,
       });
       navigate(`/medical-records/${id}/${result.id}`);
     } catch (error) {
-      console.error('Failed to start visit:', error);
-      alert('Failed to start visit: ' + error.message);
+      console.error("Failed to start visit:", error);
+      alert("Failed to start visit: " + error.message);
     } finally {
       setStartingVisit(false);
     }
@@ -116,21 +134,43 @@ const PatientDetails = () => {
   const displayAge = displayDOB ? calculateAge(displayDOB) : null;
   const displayAddress = patientInfo?.address || patient.address;
   const displayNRC = patientInfo?.nrcNumber || patient.nrcNumber;
-  const displayEmergencyName = patientInfo?.emergencyContactName || patient.emergencyContactName;
-  const displayEmergencyPhone = patientInfo?.emergencyContactPhone || patient.emergencyContactPhone;
+  const displayEmergencyName =
+    patientInfo?.emergencyContactName || patient.emergencyContactName;
+  const displayEmergencyPhone =
+    patientInfo?.emergencyContactPhone || patient.emergencyContactPhone;
 
   const isStaffPatient = patient.isStaff === true;
 
   const staffRoleConfig = {
-    admin: { label: 'Admin', icon: Shield, color: 'bg-violet-500/15 text-violet-400 border-violet-500/30' },
-    doctor: { label: 'Doctor', icon: Stethoscope, color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' },
-    receptionist: { label: 'Receptionist', icon: Phone, color: 'bg-sky-500/15 text-sky-400 border-sky-500/30' },
-    pharmacist: { label: 'Pharmacist', icon: Pill, color: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
-    nurse: { label: 'Nurse', icon: HeartPulse, color: 'bg-rose-500/15 text-rose-400 border-rose-500/30' }
+    admin: {
+      label: "Admin",
+      icon: Shield,
+      color: "bg-violet-500/15 text-violet-400 border-violet-500/30",
+    },
+    doctor: {
+      label: "Doctor",
+      icon: Stethoscope,
+      color: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+    },
+    receptionist: {
+      label: "Receptionist",
+      icon: Phone,
+      color: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+    },
+    pharmacist: {
+      label: "Pharmacist",
+      icon: Pill,
+      color: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+    },
+    nurse: {
+      label: "Nurse",
+      icon: HeartPulse,
+      color: "bg-rose-500/15 text-rose-400 border-rose-500/30",
+    },
   };
 
   const getInitials = (firstName, lastName) => {
-    return `${firstName?.[0] || ''}${lastName?.[0] || ''}`.toUpperCase() || 'P';
+    return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "P";
   };
 
   const roleCfg = isStaffPatient ? staffRoleConfig[patient.role] : null;
@@ -139,7 +179,7 @@ const PatientDetails = () => {
   return (
     <div className="space-y-6">
       <button
-        onClick={() => navigate('/patients')}
+        onClick={() => navigate("/patients")}
         className="flex items-center gap-2 text-venus-text-muted hover:text-venus-text-primary transition-colors"
       >
         <ArrowLeft className="w-5 h-5" />
@@ -160,14 +200,17 @@ const PatientDetails = () => {
                 {patient.firstName} {patient.lastName}
               </h1>
               {isStaffPatient && roleCfg && (
-                <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${roleCfg.color}`}>
+                <div
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border ${roleCfg.color}`}
+                >
                   <RoleIcon className="w-3.5 h-3.5" />
                   {roleCfg.label}
                 </div>
               )}
             </div>
             <p className="text-venus-text-muted mt-1">
-              Patient ID: {patient.id} • Registered {formatDate(patient.createdAt)}
+              Patient ID: {patient.id} • Registered{" "}
+              {formatDate(patient.createdAt)}
             </p>
             <div className="flex flex-wrap gap-2 mt-3">
               {displayAge !== null && (
@@ -188,11 +231,13 @@ const PatientDetails = () => {
                   NRC: {displayNRC}
                 </span>
               )}
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
-                patient.isActive !== false
-                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-red-500/15 text-red-400 border-red-500/30'
-              }`}>
+              <span
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
+                  patient.isActive !== false
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                    : "bg-red-500/15 text-red-400 border-red-500/30"
+                }`}
+              >
                 {patient.isActive !== false ? (
                   <>
                     <CheckCircle2 className="w-3.5 h-3.5" />
@@ -230,7 +275,9 @@ const PatientDetails = () => {
               </div>
               <div>
                 <p className="text-sm text-venus-text-muted">Phone</p>
-                <p className="text-sm font-medium text-venus-text-primary">{formatPhone(patient.phone) || 'N/A'}</p>
+                <p className="text-sm font-medium text-venus-text-primary">
+                  {formatPhone(patient.phone) || "N/A"}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -239,7 +286,9 @@ const PatientDetails = () => {
               </div>
               <div>
                 <p className="text-sm text-venus-text-muted">Email (Login)</p>
-                <p className="text-sm font-medium text-venus-text-primary">{patient.email}</p>
+                <p className="text-sm font-medium text-venus-text-primary">
+                  {patient.email}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -248,7 +297,9 @@ const PatientDetails = () => {
               </div>
               <div>
                 <p className="text-sm text-venus-text-muted">Address</p>
-                <p className="text-sm font-medium text-venus-text-primary">{displayAddress || 'N/A'}</p>
+                <p className="text-sm font-medium text-venus-text-primary">
+                  {displayAddress || "N/A"}
+                </p>
               </div>
             </div>
           </div>
@@ -266,7 +317,9 @@ const PatientDetails = () => {
               </div>
               <div>
                 <p className="text-sm text-venus-text-muted">Date of Birth</p>
-                <p className="text-sm font-medium text-venus-text-primary">{displayDOB || 'N/A'}</p>
+                <p className="text-sm font-medium text-venus-text-primary">
+                  {displayDOB || "N/A"}
+                </p>
               </div>
             </div>
             {displayAge !== null && (
@@ -276,7 +329,9 @@ const PatientDetails = () => {
                 </div>
                 <div>
                   <p className="text-sm text-venus-text-muted">Age</p>
-                  <p className="text-sm font-medium text-venus-text-primary">{displayAge} years</p>
+                  <p className="text-sm font-medium text-venus-text-primary">
+                    {displayAge} years
+                  </p>
                 </div>
               </div>
             )}
@@ -287,7 +342,9 @@ const PatientDetails = () => {
                 </div>
                 <div>
                   <p className="text-sm text-venus-text-muted">Gender</p>
-                  <p className="text-sm font-medium text-venus-text-primary capitalize">{displayGender}</p>
+                  <p className="text-sm font-medium text-venus-text-primary capitalize">
+                    {displayGender}
+                  </p>
                 </div>
               </div>
             )}
@@ -305,17 +362,21 @@ const PatientDetails = () => {
           <div className="p-3 bg-venus-bg-tertiary rounded-lg">
             <p className="text-xs text-venus-text-muted mb-1">System Role</p>
             <p className="text-sm font-medium text-venus-text-primary capitalize">
-              {isStaffPatient ? `${patient.role} (Staff)` : 'Patient'}
+              {isStaffPatient ? `${patient.role} (Staff)` : "Patient"}
             </p>
           </div>
           <div className="p-3 bg-venus-bg-tertiary rounded-lg">
             <p className="text-xs text-venus-text-muted mb-1">Auth UID</p>
-            <p className="text-sm font-medium text-venus-text-primary font-mono">{patient.id}</p>
+            <p className="text-sm font-medium text-venus-text-primary font-mono">
+              {patient.id}
+            </p>
           </div>
           <div className="p-3 bg-venus-bg-tertiary rounded-lg">
             <p className="text-xs text-venus-text-muted mb-1">Account Status</p>
-            <p className={`text-sm font-medium ${patient.isActive !== false ? 'text-emerald-400' : 'text-red-400'}`}>
-              {patient.isActive !== false ? 'Active' : 'Inactive'}
+            <p
+              className={`text-sm font-medium ${patient.isActive !== false ? "text-emerald-400" : "text-red-400"}`}
+            >
+              {patient.isActive !== false ? "Active" : "Inactive"}
             </p>
           </div>
         </div>
@@ -332,13 +393,17 @@ const PatientDetails = () => {
             {displayEmergencyName && (
               <div className="p-3 bg-venus-bg-tertiary rounded-lg">
                 <p className="text-xs text-venus-text-muted mb-1">Name</p>
-                <p className="text-sm font-medium text-venus-text-primary">{displayEmergencyName}</p>
+                <p className="text-sm font-medium text-venus-text-primary">
+                  {displayEmergencyName}
+                </p>
               </div>
             )}
             {displayEmergencyPhone && (
               <div className="p-3 bg-venus-bg-tertiary rounded-lg">
                 <p className="text-xs text-venus-text-muted mb-1">Phone</p>
-                <p className="text-sm font-medium text-venus-text-primary">{displayEmergencyPhone}</p>
+                <p className="text-sm font-medium text-venus-text-primary">
+                  {displayEmergencyPhone}
+                </p>
               </div>
             )}
           </div>
@@ -356,25 +421,37 @@ const PatientDetails = () => {
             <Loader2 className="w-6 h-6 text-venus-primary-400 animate-spin" />
           </div>
         ) : pastRecords.length === 0 ? (
-          <p className="text-venus-text-muted text-sm italic">No completed visits yet</p>
+          <p className="text-venus-text-muted text-sm italic">
+            No completed visits yet
+          </p>
         ) : (
           <div className="space-y-2">
-            {pastRecords.map(record => (
-              <div key={record.id}
-                className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-3">
+            {pastRecords.map((record) => (
+              <div
+                key={record.id}
+                className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-3"
+              >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 text-sm text-venus-text-primary font-medium">
                     <Calendar className="w-3.5 h-3.5 text-venus-text-muted" />
                     {record.visitDate}
-                    <span className="text-venus-text-muted font-normal">• {record.visitTime}</span>
+                    <span className="text-venus-text-muted font-normal">
+                      • {record.visitTime}
+                    </span>
                   </div>
                   {record.doctor?.diagnosis && (
-                    <p className="text-xs text-venus-text-muted mt-1 truncate">{record.doctor.diagnosis}</p>
+                    <p className="text-xs text-venus-text-muted mt-1 truncate">
+                      {record.doctor.diagnosis}
+                    </p>
                   )}
                 </div>
-                <button onClick={() => navigate(`/medical-records/${id}/${record.id}`)}
+                <button
+                  onClick={() =>
+                    navigate(`/medical-records/${id}/${record.id}`)
+                  }
                   className="p-2 text-venus-text-muted hover:text-venus-primary-400 hover:bg-venus-primary-500/10 rounded-lg transition-colors flex-shrink-0"
-                  title="View Record">
+                  title="View Record"
+                >
                   <Eye className="w-5 h-5" />
                 </button>
               </div>
@@ -386,9 +463,16 @@ const PatientDetails = () => {
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-4">
         {canCreateVisit() && (
-          <button onClick={handleCreateVisit} disabled={startingVisit}
-            className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-60">
-            {startingVisit ? <Loader2 className="w-5 h-5 animate-spin" /> : <FileText className="w-5 h-5" />}
+          <button
+            onClick={handleCreateVisit}
+            disabled={startingVisit}
+            className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-60"
+          >
+            {startingVisit ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <FileText className="w-5 h-5" />
+            )}
             Create Medical Record
           </button>
         )}

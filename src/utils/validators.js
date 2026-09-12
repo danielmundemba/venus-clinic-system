@@ -17,6 +17,7 @@ export const patientSchema = z.object({
   address: z.string().min(5, 'Address is required'),
   emergencyContactName: z.string().optional().or(z.literal('')),
   emergencyContactPhone: z.string().optional().or(z.literal('')),
+  allergies: z.string().optional().or(z.literal('')),
 });
 
 export const appointmentSchema = z.object({

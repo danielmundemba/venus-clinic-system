@@ -1,9 +1,12 @@
-import { useState, useCallback, useEffect } from 'react';
-import { Search, X, Loader2 } from 'lucide-react';
-import { searchPatients } from '../../firebase/db';
+import { useState, useCallback, useEffect } from "react";
+import { Search, X, Loader2 } from "lucide-react";
+import { searchPatientsByNumber } from "../../firebase/db";
 
-const SearchBar = ({ onSelect, placeholder = 'Search patients...' }) => {
-  const [query, setQuery] = useState('');
+const SearchBar = ({
+  onSelect,
+  placeholder = "Search by Patient ID (e.g. VC-000123)",
+}) => {
+  const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -16,15 +19,15 @@ const SearchBar = ({ onSelect, placeholder = 'Search patients...' }) => {
       }
       setLoading(true);
       try {
-        const patients = await searchPatients(term);
+        const patients = await searchPatientsByNumber(term);
         setResults(patients);
       } catch (error) {
-        console.error('Search error:', error);
+        console.error("Search error:", error);
       } finally {
         setLoading(false);
       }
     }, 300),
-    []
+    [],
   );
 
   useEffect(() => {
@@ -33,7 +36,7 @@ const SearchBar = ({ onSelect, placeholder = 'Search patients...' }) => {
 
   const handleSelect = (patient) => {
     onSelect(patient);
-    setQuery('');
+    setQuery("");
     setResults([]);
     setShowDropdown(false);
   };
@@ -59,7 +62,7 @@ const SearchBar = ({ onSelect, placeholder = 'Search patients...' }) => {
         {!loading && query && (
           <button
             onClick={() => {
-              setQuery('');
+              setQuery("");
               setResults([]);
             }}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-venus-text-muted hover:text-venus-text-primary"
@@ -69,7 +72,6 @@ const SearchBar = ({ onSelect, placeholder = 'Search patients...' }) => {
         )}
       </div>
 
-      {/* Dropdown Results */}
       {showDropdown && results.length > 0 && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-venus-bg-secondary border border-venus-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
           {results.map((patient) => (
@@ -81,8 +83,8 @@ const SearchBar = ({ onSelect, placeholder = 'Search patients...' }) => {
               <p className="text-sm font-medium text-venus-text-primary">
                 {patient.firstName} {patient.lastName}
               </p>
-              <p className="text-xs text-venus-text-muted mt-0.5">
-                {patient.phone} • {patient.nrcNumber || 'No NRC'}
+              <p className="text-xs text-venus-text-muted mt-0.5 font-mono">
+                {patient.patientNumber} • {patient.phone}
               </p>
             </button>
           ))}
@@ -91,14 +93,15 @@ const SearchBar = ({ onSelect, placeholder = 'Search patients...' }) => {
 
       {showDropdown && query && !loading && results.length === 0 && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-venus-bg-secondary border border-venus-border rounded-lg shadow-lg z-50 p-4 text-center">
-          <p className="text-sm text-venus-text-muted">No patients found</p>
+          <p className="text-sm text-venus-text-muted">
+            No patient found with that ID
+          </p>
         </div>
       )}
     </div>
   );
 };
 
-// Debounce utility
 function debounce(fn, ms) {
   let timer;
   return (...args) => {
