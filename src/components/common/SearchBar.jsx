@@ -1,10 +1,10 @@
 import { useState, useCallback, useEffect } from "react";
 import { Search, X, Loader2 } from "lucide-react";
-import { searchPatientsByNumber } from "../../firebase/db";
+import { searchPatientsUnified } from "../../firebase/db";
 
 const SearchBar = ({
   onSelect,
-  placeholder = "Search by Patient ID (e.g. VC-000123)",
+  placeholder = "Search by name or Patient ID...",
 }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
@@ -19,7 +19,7 @@ const SearchBar = ({
       }
       setLoading(true);
       try {
-        const patients = await searchPatientsByNumber(term);
+        const patients = await searchPatientsUnified(term);
         setResults(patients);
       } catch (error) {
         console.error("Search error:", error);
@@ -84,7 +84,7 @@ const SearchBar = ({
                 {patient.firstName} {patient.lastName}
               </p>
               <p className="text-xs text-venus-text-muted mt-0.5 font-mono">
-                {patient.patientNumber} • {patient.phone}
+                {patient.patientNumber || "No ID"} • {patient.phone}
               </p>
             </button>
           ))}
@@ -93,9 +93,7 @@ const SearchBar = ({
 
       {showDropdown && query && !loading && results.length === 0 && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-venus-bg-secondary border border-venus-border rounded-lg shadow-lg z-50 p-4 text-center">
-          <p className="text-sm text-venus-text-muted">
-            No patient found with that ID
-          </p>
+          <p className="text-sm text-venus-text-muted">No patients found</p>
         </div>
       )}
     </div>

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
-import { getAllNurseRooms, createNurseRoom } from "../../firebase/db";
-import { deleteDocument } from "../../firebase/db";
+import {
+  getAllNurseRooms,
+  createNurseRoom,
+  deleteDocument,
+} from "../../firebase/db";
 import { useAuditLog } from "../../hooks/useAuditLog";
 import {
   DoorOpen,
@@ -10,7 +13,7 @@ import {
   X,
   AlertCircle,
   Trash2,
-  User,
+  Users,
 } from "lucide-react";
 
 const NurseRooms = () => {
@@ -79,9 +82,9 @@ const NurseRooms = () => {
   };
 
   const handleDelete = async (room) => {
-    if (room.nurseOnDuty || room.isOccupied) {
+    if ((room.nurses?.length || 0) > 0 || (room.occupants?.length || 0) > 0) {
       alert(
-        "This room is currently in use — check the nurse out (or wait for the patient to finish) before deleting it.",
+        "This room still has nurses checked in or patients being seen — clear it out before deleting.",
       );
       return;
     }
@@ -107,8 +110,8 @@ const NurseRooms = () => {
             Nurse Rooms
           </h1>
           <p className="text-venus-text-muted mt-1">
-            Set up the physical rooms nurses can check into. Patients are
-            auto-assigned to an open, staffed room.
+            Set up the physical rooms nurses can check into. Multiple nurses can
+            share a room; patients are auto-assigned to a free nurse.
           </p>
         </div>
         <button
@@ -140,53 +143,57 @@ const NurseRooms = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {rooms.map((room) => (
-            <div key={room.id} className="card space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {room.nurseOnDuty ? (
-                    <DoorOpen className="w-5 h-5 text-emerald-500" />
-                  ) : (
-                    <DoorClosed className="w-5 h-5 text-venus-text-muted" />
-                  )}
-                  <h3 className="font-semibold text-venus-text-primary">
-                    Room {room.roomNumber}
-                  </h3>
-                </div>
-                <button
-                  onClick={() => handleDelete(room)}
-                  className="p-1.5 text-venus-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-                  title="Delete room"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="space-y-1.5 text-sm">
-                <div className="flex items-center gap-2 text-venus-text-muted">
-                  <User className="w-3.5 h-3.5" />
-                  {room.nurseOnDuty ? (
-                    <span className="text-venus-text-primary">
-                      {room.assignedNurseName}
-                    </span>
-                  ) : (
-                    <span className="italic">No nurse on duty</span>
-                  )}
-                </div>
-                {room.nurseOnDuty && (
-                  <span
-                    className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      room.isOccupied
-                        ? "bg-amber-500/10 text-amber-500"
-                        : "bg-emerald-500/10 text-emerald-500"
-                    }`}
+          {rooms.map((room) => {
+            const nurseCount = room.nurses?.length || 0;
+            const occupantCount = room.occupants?.length || 0;
+            return (
+              <div key={room.id} className="card space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    {nurseCount > 0 ? (
+                      <DoorOpen className="w-5 h-5 text-emerald-500" />
+                    ) : (
+                      <DoorClosed className="w-5 h-5 text-venus-text-muted" />
+                    )}
+                    <h3 className="font-semibold text-venus-text-primary">
+                      Room {room.roomNumber}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(room)}
+                    className="p-1.5 text-venus-text-muted hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                    title="Delete room"
                   >
-                    {room.isOccupied ? "With a patient" : "Available"}
-                  </span>
-                )}
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center gap-2 text-venus-text-muted">
+                    <Users className="w-3.5 h-3.5" />
+                    {nurseCount > 0 ? (
+                      <span className="text-venus-text-primary">
+                        {room.nurses.map((n) => n.nurseName).join(", ")}
+                      </span>
+                    ) : (
+                      <span className="italic">No nurses checked in</span>
+                    )}
+                  </div>
+                  {nurseCount > 0 && (
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                        occupantCount >= nurseCount
+                          ? "bg-amber-500/10 text-amber-500"
+                          : "bg-emerald-500/10 text-emerald-500"
+                      }`}
+                    >
+                      {occupantCount} / {nurseCount} nurses with a patient
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -182,10 +182,7 @@ export const generateDailyQueueNumber = async () => {
 };
 
 // ============================================
-// ON-DUTY STATUS (doctors & nurses)
-// dutyRoomNumber: for a doctor, a free-text consulting room they entered
-// when going on duty. For a nurse, this mirrors the nurseRooms doc they
-// checked into (set by nurseCheckIn, not this function).
+// ON-DUTY STATUS (doctors)
 // ============================================
 export const setDutyStatus = async (
   userId,
@@ -213,15 +210,17 @@ export const getOnDutyStaff = async (role) => {
 
 // ============================================
 // NURSE ROOMS
+// A room can host multiple nurses at once (nurses: [{nurseId, nurseName}]),
+// and each nurse can be actively seeing at most one patient at a time
+// (occupants: [{recordId, nurseId, nurseName}]). A room is "available" for
+// a new patient whenever it has at least one nurse without a current
+// occupant entry.
 // ============================================
 export const createNurseRoom = async (roomNumber) => {
   return await addDoc(collection(db, "nurseRooms"), {
     roomNumber,
-    assignedNurseId: null,
-    assignedNurseName: null,
-    nurseOnDuty: false,
-    isOccupied: false,
-    currentRecordId: null,
+    nurses: [],
+    occupants: [],
     createdAt: serverTimestamp(),
   });
 };
@@ -231,25 +230,20 @@ export const getAllNurseRooms = async () => {
   return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
 };
 
-// Rooms with an on-duty nurse and no current patient — for the
-// receptionist's room picker when sending a patient to a nurse.
+// Rooms with at least one nurse free to take a new patient.
 export const getAvailableNurseRooms = async () => {
-  const q = query(
-    collection(db, "nurseRooms"),
-    where("nurseOnDuty", "==", true),
-    where("isOccupied", "==", false),
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const rooms = await getAllNurseRooms();
+  return rooms.filter((r) => pickNurseFromRoom(r) !== null);
 };
 
 export const nurseCheckIn = async (nurseId, nurseName, roomId, roomNumber) => {
-  await updateDoc(doc(db, "nurseRooms", roomId), {
-    assignedNurseId: nurseId,
-    assignedNurseName: nurseName,
-    nurseOnDuty: true,
-    updatedAt: serverTimestamp(),
-  });
+  const roomRef = doc(db, "nurseRooms", roomId);
+  const roomSnap = await getDoc(roomRef);
+  const nurses = roomSnap.exists() ? roomSnap.data().nurses || [] : [];
+  if (!nurses.some((n) => n.nurseId === nurseId)) {
+    nurses.push({ nurseId, nurseName });
+  }
+  await updateDoc(roomRef, { nurses, updatedAt: serverTimestamp() });
   await updateDoc(doc(db, "users", nurseId), {
     isOnDuty: true,
     dutyRoomId: roomId,
@@ -259,12 +253,19 @@ export const nurseCheckIn = async (nurseId, nurseName, roomId, roomNumber) => {
 };
 
 export const nurseCheckOut = async (nurseId, roomId) => {
-  await updateDoc(doc(db, "nurseRooms", roomId), {
-    nurseOnDuty: false,
-    assignedNurseId: null,
-    assignedNurseName: null,
-    updatedAt: serverTimestamp(),
-  });
+  const roomRef = doc(db, "nurseRooms", roomId);
+  const roomSnap = await getDoc(roomRef);
+  if (roomSnap.exists()) {
+    const data = roomSnap.data();
+    const occupants = data.occupants || [];
+    if (occupants.some((o) => o.nurseId === nurseId)) {
+      throw new Error(
+        "You still have a patient assigned — finish their vitals before going off duty.",
+      );
+    }
+    const nurses = (data.nurses || []).filter((n) => n.nurseId !== nurseId);
+    await updateDoc(roomRef, { nurses, updatedAt: serverTimestamp() });
+  }
   await updateDoc(doc(db, "users", nurseId), {
     isOnDuty: false,
     dutyRoomId: null,
@@ -273,23 +274,25 @@ export const nurseCheckOut = async (nurseId, roomId) => {
   });
 };
 
+// A nurse in `room.nurses` who doesn't currently have an occupant entry.
+const pickNurseFromRoom = (room) => {
+  const busyNurseIds = new Set((room.occupants || []).map((o) => o.nurseId));
+  return (room.nurses || []).find((n) => !busyNurseIds.has(n.nurseId)) || null;
+};
+
 const findAvailableNurseRoom = async () => {
-  const q = query(
-    collection(db, "nurseRooms"),
-    where("nurseOnDuty", "==", true),
-    where("isOccupied", "==", false),
-    limit(1),
-  );
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-  const d = snapshot.docs[0];
-  return { id: d.id, ...d.data() };
+  const rooms = await getAllNurseRooms();
+  for (const room of rooms) {
+    const nurse = pickNurseFromRoom(room);
+    if (nurse) return { room, nurse };
+  }
+  return null;
 };
 
 // ============================================
 // DOCTOR ASSIGNMENT (least-busy on-duty doctor)
-// Counts both 'nurse' and 'doctor' stage records, since a doctor is now
-// assigned as soon as the patient is sent to the nurse — not after vitals.
+// Counts both 'nurse' and 'doctor' stage records, since a doctor is
+// assigned as soon as the patient is sent to the nurse.
 // ============================================
 const assignLeastBusyDoctor = async () => {
   const onDutyDoctors = await getOnDutyStaff("doctor");
@@ -321,7 +324,6 @@ const assignLeastBusyDoctor = async () => {
   };
 };
 
-// Manual overrides — admin/receptionist reassignment controls.
 export const reassignDoctor = async (
   patientId,
   recordId,
@@ -337,19 +339,41 @@ export const reassignDoctor = async (
   });
 };
 
-export const reassignNurseRoom = async (
-  patientId,
-  recordId,
-  roomId,
-  roomNumber,
-  nurseId,
-  nurseName,
-) => {
-  await updateDoc(doc(db, "users", patientId, "MedicalRecords", recordId), {
-    assignedRoomId: roomId,
-    assignedRoomNumber: roomNumber,
-    assignedNurseId: nurseId,
-    assignedNurseName: nurseName,
+// newRoomId only — a free nurse within that room is picked automatically.
+export const reassignNurseRoom = async (patientId, recordId, newRoomId) => {
+  const recordRef = doc(db, "users", patientId, "MedicalRecords", recordId);
+  const recordSnap = await getDoc(recordRef);
+  const existing = recordSnap.exists() ? recordSnap.data() : {};
+
+  if (existing.assignedRoomId && existing.assignedRoomId !== newRoomId) {
+    const oldRoomRef = doc(db, "nurseRooms", existing.assignedRoomId);
+    const oldRoomSnap = await getDoc(oldRoomRef);
+    if (oldRoomSnap.exists()) {
+      const occupants = (oldRoomSnap.data().occupants || []).filter(
+        (o) => o.recordId !== recordId,
+      );
+      await updateDoc(oldRoomRef, { occupants, updatedAt: serverTimestamp() });
+    }
+  }
+
+  const newRoomRef = doc(db, "nurseRooms", newRoomId);
+  const newRoomSnap = await getDoc(newRoomRef);
+  if (!newRoomSnap.exists()) throw new Error("Room not found");
+  const newRoom = { id: newRoomSnap.id, ...newRoomSnap.data() };
+  const nurse = pickNurseFromRoom(newRoom);
+  if (!nurse) throw new Error("No free nurse in that room right now");
+
+  const occupants = [
+    ...(newRoom.occupants || []).filter((o) => o.recordId !== recordId),
+    { recordId, nurseId: nurse.nurseId, nurseName: nurse.nurseName },
+  ];
+  await updateDoc(newRoomRef, { occupants, updatedAt: serverTimestamp() });
+
+  await updateDoc(recordRef, {
+    assignedRoomId: newRoom.id,
+    assignedRoomNumber: newRoom.roomNumber,
+    assignedNurseId: nurse.nurseId,
+    assignedNurseName: nurse.nurseName,
     updatedAt: serverTimestamp(),
   });
 };
@@ -498,24 +522,31 @@ export const getMedicalRecord = async (patientId, recordId) => {
   return null;
 };
 
-// roomId lets the receptionist pick a specific room; omitted, it auto-picks
-// the first open one. Also assigns the doctor right away (least-busy
-// on-duty doctor), so reception + nurse both know who the patient will see
-// before vitals are even taken.
 export const sendToNurse = async (patientId, recordId, roomId = null) => {
   let room = null;
+  let nurse = null;
 
   if (roomId) {
     const roomSnap = await getDoc(doc(db, "nurseRooms", roomId));
-    if (roomSnap.exists()) room = { id: roomSnap.id, ...roomSnap.data() };
+    if (roomSnap.exists()) {
+      room = { id: roomSnap.id, ...roomSnap.data() };
+      nurse = pickNurseFromRoom(room);
+    }
   } else {
-    room = await findAvailableNurseRoom();
+    const found = await findAvailableNurseRoom();
+    if (found) {
+      room = found.room;
+      nurse = found.nurse;
+    }
   }
 
-  if (room) {
+  if (room && nurse) {
+    const occupants = [
+      ...(room.occupants || []),
+      { recordId, nurseId: nurse.nurseId, nurseName: nurse.nurseName },
+    ];
     await updateDoc(doc(db, "nurseRooms", room.id), {
-      isOccupied: true,
-      currentRecordId: recordId,
+      occupants,
       updatedAt: serverTimestamp(),
     });
   }
@@ -526,8 +557,8 @@ export const sendToNurse = async (patientId, recordId, roomId = null) => {
     status: "nurse",
     assignedRoomId: room?.id || null,
     assignedRoomNumber: room?.roomNumber || null,
-    assignedNurseId: room?.assignedNurseId || null,
-    assignedNurseName: room?.assignedNurseName || null,
+    assignedNurseId: nurse?.nurseId || null,
+    assignedNurseName: nurse?.nurseName || null,
     assignedDoctorId: doctor?.id || null,
     assignedDoctorName: doctor?.name || null,
     assignedDoctorRoom: doctor?.room || null,
@@ -543,15 +574,16 @@ export const updateVitals = async (patientId, recordId, vitalsData) => {
   const existing = recordSnap.exists() ? recordSnap.data() : {};
 
   if (existing.assignedRoomId) {
-    await updateDoc(doc(db, "nurseRooms", existing.assignedRoomId), {
-      isOccupied: false,
-      currentRecordId: null,
-      updatedAt: serverTimestamp(),
-    });
+    const roomRef = doc(db, "nurseRooms", existing.assignedRoomId);
+    const roomSnap = await getDoc(roomRef);
+    if (roomSnap.exists()) {
+      const occupants = (roomSnap.data().occupants || []).filter(
+        (o) => o.recordId !== recordId,
+      );
+      await updateDoc(roomRef, { occupants, updatedAt: serverTimestamp() });
+    }
   }
 
-  // Doctor is normally already assigned at sendToNurse — this only covers
-  // the edge case where no doctor was on duty at check-in time.
   let doctorId = existing.assignedDoctorId || null;
   let doctorName = existing.assignedDoctorName || null;
   let doctorRoom = existing.assignedDoctorRoom || null;
@@ -712,4 +744,33 @@ export const batchWrite = async (operations) => {
     if (type === "delete") batch.delete(ref);
   });
   await batch.commit();
+};
+
+export const generatePatientNumberForUser = async (userId) => {
+  const patientNumber = await generatePatientNumber();
+  await updateDoc(doc(db, "users", userId), {
+    patientNumber,
+    updatedAt: serverTimestamp(),
+  });
+  return patientNumber;
+};
+
+export const searchPatientsUnified = async (searchTerm, maxResults = 20) => {
+  const term = searchTerm.trim();
+  if (!term) return [];
+
+  const [byNumber, byName] = await Promise.all([
+    searchPatientsByNumber(term, maxResults),
+    searchPatients(term, maxResults),
+  ]);
+
+  const merged = [...byNumber];
+  const seenIds = new Set(merged.map((p) => p.id));
+  byName.forEach((p) => {
+    if (!seenIds.has(p.id)) {
+      merged.push(p);
+      seenIds.add(p.id);
+    }
+  });
+  return merged.slice(0, maxResults);
 };

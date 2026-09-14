@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   collection,
   query,
@@ -12,7 +12,6 @@ import {
 } from "firebase/firestore";
 import { db } from "../../firebase/config";
 import { formatDate } from "../../utils/formatters";
-import PatientRegistration from "./PatientRegistration";
 import RowActionsMenu from "../../components/common/RowActionsMenu";
 import { useAuditLog } from "../../hooks/useAuditLog";
 import {
@@ -41,10 +40,10 @@ import {
 
 const PatientList = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logAction } = useAuditLog();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [successMessage, setSuccessMessage] = useState("");
@@ -77,6 +76,13 @@ const PatientList = () => {
       color: "bg-rose-500/15 text-rose-400 border-rose-500/30",
     },
   };
+
+  useEffect(() => {
+    if (location.state?.successMessage) {
+      setSuccessMessage(location.state.successMessage);
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state]);
 
   useEffect(() => {
     const q = query(
@@ -214,14 +220,6 @@ const PatientList = () => {
     </div>
   );
 
-  const handleRegistrationSuccess = (patient) => {
-    setShowRegisterModal(false);
-    setSuccessMessage(
-      `${patient.firstName} ${patient.lastName} was registered successfully. ` +
-        `They can now log in with their email and the default password (123456).`,
-    );
-  };
-
   return (
     <div className="space-y-6">
       {successMessage && (
@@ -253,7 +251,7 @@ const PatientList = () => {
           </p>
         </div>
         <button
-          onClick={() => setShowRegisterModal(true)}
+          onClick={() => navigate("/patients/register")}
           className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
         >
           <Plus className="w-4 h-4" />
@@ -500,18 +498,13 @@ const PatientList = () => {
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                     let page;
-                    if (totalPages <= 5) {
-                      page = i + 1;
-                    } else if (currentPage <= 3) {
-                      page = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
+                    if (totalPages <= 5) page = i + 1;
+                    else if (currentPage <= 3) page = i + 1;
+                    else if (currentPage >= totalPages - 2)
                       page = totalPages - 4 + i;
-                    } else {
-                      page = currentPage - 2 + i;
-                    }
+                    else page = currentPage - 2 + i;
                     return (
                       <button
                         key={page}
@@ -526,7 +519,6 @@ const PatientList = () => {
                       </button>
                     );
                   })}
-
                   <button
                     onClick={() =>
                       setCurrentPage((p) => Math.min(totalPages, p + 1))
@@ -542,12 +534,6 @@ const PatientList = () => {
           </>
         )}
       </div>
-
-      <PatientRegistration
-        isOpen={showRegisterModal}
-        onClose={() => setShowRegisterModal(false)}
-        onSuccess={handleRegistrationSuccess}
-      />
     </div>
   );
 };

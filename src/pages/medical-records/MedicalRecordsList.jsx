@@ -23,7 +23,6 @@ import {
   Plus,
   Search,
   X,
-  History,
 } from "lucide-react";
 
 const statusConfig = {
@@ -59,29 +58,45 @@ const statusConfig = {
   },
 };
 
+// Which workflow stage each role's queue lives at — used to default the
+// view to "just my part of the workflow" instead of everything at once.
+const ROLE_STAGE = {
+  receptionist: "reception",
+  nurse: "nurse",
+  doctor: "doctor",
+  pharmacist: "pharmacy",
+};
+
 const MedicalRecordsList = () => {
   const navigate = useNavigate();
   const { userRole } = useAuth();
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showCompleted, setShowCompleted] = useState(false);
+  const [viewMode, setViewMode] = useState("mine"); // 'mine' | 'all' | 'completed'
   const [searchQuery, setSearchQuery] = useState("");
+
+  const myStage = ROLE_STAGE[userRole] || null;
 
   useEffect(() => {
     loadRecords();
-  }, [showCompleted]);
+  }, [viewMode]);
 
   const loadRecords = async () => {
     setLoading(true);
     setError(null);
 
     try {
-      const recordsData = showCompleted
-        ? await getRecentlyCompletedRecords(
-            new Date(Date.now() - 24 * 60 * 60 * 1000),
-          )
-        : await getActiveMedicalRecords();
+      let recordsData;
+      if (viewMode === "completed") {
+        recordsData = await getRecentlyCompletedRecords(
+          new Date(Date.now() - 24 * 60 * 60 * 1000),
+        );
+      } else if (viewMode === "mine" && myStage) {
+        recordsData = await getActiveMedicalRecords(myStage);
+      } else {
+        recordsData = await getActiveMedicalRecords();
+      }
 
       const patientIds = [...new Set(recordsData.map((r) => r.patientId))];
       const patientMap = {};
@@ -134,6 +149,14 @@ const MedicalRecordsList = () => {
 
   const canCreateVisit = () => ["admin", "receptionist"].includes(userRole);
 
+  const viewLabel = {
+    mine: myStage
+      ? `My Queue (${statusConfig[myStage].label})`
+      : "Active Visits",
+    all: "All Active Visits",
+    completed: "Completed (24h)",
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -146,17 +169,15 @@ const MedicalRecordsList = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowCompleted((s) => !s)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              showCompleted
-                ? "bg-venus-primary-500 text-white"
-                : "bg-venus-bg-tertiary text-venus-text-secondary hover:bg-venus-primary-500/10"
-            }`}
+          <select
+            value={viewMode}
+            onChange={(e) => setViewMode(e.target.value)}
+            className="input-field !w-auto"
           >
-            <History className="w-4 h-4" />
-            {showCompleted ? "Showing Completed (24h)" : "View Completed Today"}
-          </button>
+            {myStage && <option value="mine">{viewLabel.mine}</option>}
+            <option value="all">{viewLabel.all}</option>
+            <option value="completed">{viewLabel.completed}</option>
+          </select>
           {canCreateVisit() && (
             <button
               onClick={() => navigate("/medical-records/create")}
@@ -234,9 +255,9 @@ const MedicalRecordsList = () => {
                   >
                     {searchQuery
                       ? "No matching records"
-                      : showCompleted
+                      : viewMode === "completed"
                         ? "No visits completed in the last 24 hours"
-                        : "No active medical records found"}
+                        : "Nothing in this queue right now"}
                   </td>
                 </tr>
               ) : (

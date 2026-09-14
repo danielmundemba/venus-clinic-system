@@ -517,22 +517,17 @@ const MedicalRecordDetails = () => {
   const openReassignNurse = async () => {
     setShowReassignNurse(true);
     const rooms = await getAllNurseRooms();
-    setNurseRoomsForReassign(rooms.filter((r) => r.nurseOnDuty));
+    setNurseRoomsForReassign(rooms.filter((r) => (r.nurses?.length || 0) > 0));
   };
 
   const handleReassignNurse = async (roomId) => {
-    const room = nurseRoomsForReassign.find((r) => r.id === roomId);
-    if (!room) return;
-    await reassignNurseRoom(
-      patientId,
-      recordId,
-      room.id,
-      room.roomNumber,
-      room.assignedNurseId,
-      room.assignedNurseName,
-    );
-    setShowReassignNurse(false);
-    await loadData();
+    try {
+      await reassignNurseRoom(patientId, recordId, roomId);
+      setShowReassignNurse(false);
+      await loadData();
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
   if (loading) {
@@ -683,7 +678,8 @@ const MedicalRecordDetails = () => {
                 <option value="">Reassign to room...</option>
                 {nurseRoomsForReassign.map((r) => (
                   <option key={r.id} value={r.id}>
-                    Room {r.roomNumber} — {r.assignedNurseName}
+                    Room {r.roomNumber} (
+                    {r.nurses.map((n) => n.nurseName).join(", ")})
                   </option>
                 ))}
               </select>
@@ -818,7 +814,8 @@ const MedicalRecordDetails = () => {
                     ) : (
                       availableRooms.map((r) => (
                         <option key={r.id} value={r.id}>
-                          Room {r.roomNumber} — {r.assignedNurseName}
+                          Room {r.roomNumber} (
+                          {r.nurses.map((n) => n.nurseName).join(", ")})
                         </option>
                       ))
                     )}
@@ -1022,12 +1019,14 @@ const MedicalRecordDetails = () => {
             Doctor / Diagnosis
           </h3>
           <div className="ml-auto flex items-center gap-3">
-            <button
-              onClick={() => navigate(`/patients/${patientId}`)}
-              className="text-sm text-venus-primary-400 hover:underline flex items-center gap-1"
-            >
-              <User className="w-4 h-4" /> View Patient
-            </button>
+            {canViewStage("doctor") && (
+              <button
+                onClick={() => navigate(`/patients/${patientId}`)}
+                className="text-sm text-venus-primary-400 hover:underline flex items-center gap-1"
+              >
+                <User className="w-4 h-4" /> View Patient
+              </button>
+            )}
             {isStageComplete("doctor") && (
               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
             )}

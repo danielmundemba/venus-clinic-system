@@ -1,54 +1,65 @@
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
-  updateProfile, 
-} from 'firebase/auth';
-import { generatePatientNumber } from './db';
-import { doc, setDoc, getDoc, serverTimestamp, collection, addDoc } from 'firebase/firestore';
-import app from './config';           // Default import
-import { auth, db } from './config';  // Named imports
+  updateProfile,
+} from "firebase/auth";
+import {
+  doc,
+  setDoc,
+  getDoc,
+  serverTimestamp,
+  collection,
+  addDoc,
+} from "firebase/firestore";
+import app from "./config";
+import { auth, db } from "./config";
+import { generatePatientNumber } from "./db";
 
-/**
- * Register a new staff user (admin, doctor, receptionist, pharmacist, nurse).
- * Uses a secondary Firebase auth instance so the current admin stays logged in.
- * Creates: auth user -> users/{uid} doc -> patientInfo subcollection
- * Staff are also patients — they get the same patientInfo structure.
- */
 export const registerStaff = async (email, password, staffData) => {
-  // Dynamically import to create a secondary Firebase app instance
-  const { initializeApp, deleteApp } = await import('firebase/app');
-  const { getAuth } = await import('firebase/auth');
+  const { initializeApp, deleteApp } = await import("firebase/app");
+  const { getAuth } = await import("firebase/auth");
 
-  const secondaryApp = initializeApp({
-    apiKey: "AIzaSyBaOZq2OsYe39sV4iicJ8OA789fYgMW1eY",
-    authDomain: "venus-clinic-system.firebaseapp.com",
-    projectId: "venus-clinic-system",
-    storageBucket: "venus-clinic-system.firebasestorage.app",
-    messagingSenderId: "321143099761",
-    appId: "1:321143099761:web:88a984bc85c5a8d62026d0",
-    measurementId: "G-4HGP5KZ34C"
-  }, 'staff-secondary');
+  const secondaryApp = initializeApp(
+    {
+      apiKey: "AIzaSyBaOZq2OsYe39sV4iicJ8OA789fYgMW1eY",
+      authDomain: "venus-clinic-system.firebaseapp.com",
+      projectId: "venus-clinic-system",
+      storageBucket: "venus-clinic-system.firebasestorage.app",
+      messagingSenderId: "321143099761",
+      appId: "1:321143099761:web:88a984bc85c5a8d62026d0",
+      measurementId: "G-4HGP5KZ34C",
+    },
+    "staff-secondary",
+  );
 
   const secondaryAuth = getAuth(secondaryApp);
 
   try {
-    // Step 1: Create auth user via secondary auth (admin stays logged in)
-    const { user } = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    const { user } = await createUserWithEmailAndPassword(
+      secondaryAuth,
+      email,
+      password,
+    );
     const uid = user.uid;
 
-    // Step 2: Update auth profile
     await updateProfile(user, {
-      displayName: `${staffData.firstName} ${staffData.lastName}`
+      displayName: `${staffData.firstName} ${staffData.lastName}`,
     });
 
-    // Step 3: Create user document in /users/{uid}
-    await setDoc(doc(db, 'users', uid), {
+    // Generated on the main db connection (not the secondary auth app) —
+    // this is what was missing before, which is why staff accounts
+    // created from User Management never got a searchable Patient ID.
+    const patientNumber = await generatePatientNumber();
+
+    await setDoc(doc(db, "users", uid), {
       firstName: staffData.firstName,
       lastName: staffData.lastName,
       fullName: `${staffData.firstName} ${staffData.lastName}`,
-      searchableName: staffData.searchableName || 
+      patientNumber,
+      searchableName:
+        staffData.searchableName ||
         `${staffData.firstName.toLowerCase()} ${staffData.lastName.toLowerCase()}`,
       email,
       phone: staffData.phone || null,
@@ -58,13 +69,13 @@ export const registerStaff = async (email, password, staffData) => {
       isActive: true,
       isStaff: true,
       isPatient: true,
+      isOnDuty: false,
     });
 
-    // Step 4: Create patientInfo subcollection (staff are also patients)
-    const patientInfoRef = collection(db, 'users', uid, 'patientInfo');
+    const patientInfoRef = collection(db, "users", uid, "patientInfo");
     const patientInfoDoc = await addDoc(patientInfoRef, {
       DOB: staffData.DOB || null,
-      gender: staffData.gender || 'other',
+      gender: staffData.gender || "other",
       age: staffData.age || null,
       nrcNumber: staffData.nrcNumber || null,
       address: staffData.address || null,
@@ -74,74 +85,79 @@ export const registerStaff = async (email, password, staffData) => {
       updatedAt: serverTimestamp(),
     });
 
-    // Step 5: Clean up — sign out and delete the secondary app
     await secondaryAuth.signOut();
-    await deleteApp(secondaryApp);  // ✅ Fixed: use deleteApp(), not secondaryApp.delete()
+    await deleteApp(secondaryApp);
 
-    return { 
-      user, 
-      uid, 
-      patientInfoId: patientInfoDoc.id 
+    return {
+      user,
+      uid,
+      patientNumber,
+      patientInfoId: patientInfoDoc.id,
     };
   } catch (error) {
-    // Clean up secondary app on any error
     try {
       await secondaryAuth.signOut();
-      await deleteApp(secondaryApp);  // ✅ Fixed here too
-    } catch (e) { /* ignore cleanup errors */ }
+      await deleteApp(secondaryApp);
+    } catch (e) {
+      /* ignore cleanup errors */
+    }
     throw error;
   }
 };
 
-/**
- * Register a new patient account.
- * Uses a secondary Firebase app instance so the current staff member stays logged in.
- */
 export const registerPatient = async (email, password, patientData) => {
-  const { initializeApp, deleteApp } = await import('firebase/app');
-  const { getAuth } = await import('firebase/auth');
+  const { initializeApp, deleteApp } = await import("firebase/app");
+  const { getAuth } = await import("firebase/auth");
 
-  const secondaryApp = initializeApp({
-    apiKey: "AIzaSyBaOZq2OsYe39sV4iicJ8OA789fYgMW1eY",
-    authDomain: "venus-clinic-system.firebaseapp.com",
-    projectId: "venus-clinic-system",
-    storageBucket: "venus-clinic-system.firebasestorage.app",
-    messagingSenderId: "321143099761",
-    appId: "1:321143099761:web:88a984bc85c5a8d62026d0",
-    measurementId: "G-4HGP5KZ34C"
-  }, 'patient-secondary');
+  const secondaryApp = initializeApp(
+    {
+      apiKey: "AIzaSyBaOZq2OsYe39sV4iicJ8OA789fYgMW1eY",
+      authDomain: "venus-clinic-system.firebaseapp.com",
+      projectId: "venus-clinic-system",
+      storageBucket: "venus-clinic-system.firebasestorage.app",
+      messagingSenderId: "321143099761",
+      appId: "1:321143099761:web:88a984bc85c5a8d62026d0",
+      measurementId: "G-4HGP5KZ34C",
+    },
+    "patient-secondary",
+  );
 
   const secondaryAuth = getAuth(secondaryApp);
 
   try {
-    const { user } = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    const { user } = await createUserWithEmailAndPassword(
+      secondaryAuth,
+      email,
+      password,
+    );
     const uid = user.uid;
 
     await updateProfile(user, {
-      displayName: `${patientData.firstName} ${patientData.lastName}`
+      displayName: `${patientData.firstName} ${patientData.lastName}`,
     });
 
     const patientNumber = await generatePatientNumber();
 
-    await setDoc(doc(db, 'users', uid), {
+    await setDoc(doc(db, "users", uid), {
       firstName: patientData.firstName,
       lastName: patientData.lastName,
       fullName: `${patientData.firstName} ${patientData.lastName}`,
-      patientNumber,   
-      searchableName: patientData.searchableName || 
+      patientNumber,
+      searchableName:
+        patientData.searchableName ||
         `${patientData.firstName.toLowerCase()} ${patientData.lastName.toLowerCase()}`,
       email,
       phone: patientData.phone,
-      allergies: patientData.allergies || null,   
+      allergies: patientData.allergies || null,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      role: 'patient',
+      role: "patient",
       isActive: true,
       isStaff: false,
       isPatient: true,
     });
 
-    const patientInfoRef = collection(db, 'users', uid, 'patientInfo');
+    const patientInfoRef = collection(db, "users", uid, "patientInfo");
     const patientInfoDoc = await addDoc(patientInfoRef, {
       DOB: patientData.DOB,
       gender: patientData.gender,
@@ -155,18 +171,21 @@ export const registerPatient = async (email, password, patientData) => {
     });
 
     await secondaryAuth.signOut();
-    await deleteApp(secondaryApp);  // ✅ Fixed
+    await deleteApp(secondaryApp);
 
-    return { 
-      user, 
-      uid, 
-      patientInfoId: patientInfoDoc.id 
+    return {
+      user,
+      uid,
+      patientNumber,
+      patientInfoId: patientInfoDoc.id,
     };
   } catch (error) {
     try {
       await secondaryAuth.signOut();
-      await deleteApp(secondaryApp);  // ✅ Fixed
-    } catch (e) { /* ignore cleanup errors */ }
+      await deleteApp(secondaryApp);
+    } catch (e) {
+      /* ignore cleanup errors */
+    }
     throw error;
   }
 };
@@ -181,7 +200,7 @@ export const logoutUser = async () => {
 };
 
 export const getUserRole = async (uid) => {
-  const userDoc = await getDoc(doc(db, 'users', uid));
+  const userDoc = await getDoc(doc(db, "users", uid));
   if (userDoc.exists()) {
     return userDoc.data().role;
   }

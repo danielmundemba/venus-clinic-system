@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
 import {
   setDutyStatus,
@@ -6,22 +8,44 @@ import {
   nurseCheckIn,
   nurseCheckOut,
 } from "../../firebase/db";
-import { DoorOpen, DoorClosed, Loader2 } from "lucide-react";
+import { DoorOpen, DoorClosed, Loader2, Users } from "lucide-react";
 
 const DutyToggle = () => {
   const { user, userRole } = useAuth();
+  const [loadingStatus, setLoadingStatus] = useState(true);
   const [isOnDuty, setIsOnDuty] = useState(false);
   const [rooms, setRooms] = useState([]);
   const [selectedRoom, setSelectedRoom] = useState("");
   const [dutyRoomId, setDutyRoomId] = useState(null);
+  const [dutyRoomNumber, setDutyRoomNumber] = useState(null);
   const [doctorRoomInput, setDoctorRoomInput] = useState("");
   const [saving, setSaving] = useState(false);
 
+  // Load the person's real duty status from their own user doc on mount —
+  // previously this always started as "Off Duty" regardless of reality.
   useEffect(() => {
-    if (userRole === "nurse") {
-      getAllNurseRooms().then(setRooms);
-    }
-  }, [userRole]);
+    if (!user?.uid) return;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          setIsOnDuty(!!data.isOnDuty);
+          if (userRole === "nurse") {
+            setDutyRoomId(data.dutyRoomId || null);
+            setDutyRoomNumber(data.dutyRoomNumber || null);
+          } else if (userRole === "doctor") {
+            setDoctorRoomInput(data.dutyRoomNumber || "");
+          }
+        }
+        if (userRole === "nurse") {
+          setRooms(await getAllNurseRooms());
+        }
+      } finally {
+        setLoadingStatus(false);
+      }
+    })();
+  }, [user?.uid, userRole]);
 
   const toggleDoctor = async () => {
     setSaving(true);
@@ -53,22 +77,29 @@ const DutyToggle = () => {
           room.roomNumber,
         );
         setDutyRoomId(room.id);
+        setDutyRoomNumber(room.roomNumber);
         setIsOnDuty(true);
       } else {
         await nurseCheckOut(user.uid, dutyRoomId);
         setDutyRoomId(null);
+        setDutyRoomNumber(null);
         setIsOnDuty(false);
       }
+    } catch (err) {
+      alert(err.message);
     } finally {
       setSaving(false);
     }
   };
 
   if (!["doctor", "nurse"].includes(userRole)) return null;
-
-  const availableRooms = rooms.filter(
-    (r) => !r.nurseOnDuty || r.id === dutyRoomId,
-  );
+  if (loadingStatus) {
+    return (
+      <div className="card flex items-center gap-2 text-venus-text-muted">
+        <Loader2 className="w-4 h-4 animate-spin" /> Checking duty status...
+      </div>
+    );
+  }
 
   return (
     <div className="card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -84,7 +115,7 @@ const DutyToggle = () => {
           </p>
           {userRole === "nurse" && isOnDuty && (
             <p className="text-xs text-venus-text-muted">
-              Room {rooms.find((r) => r.id === dutyRoomId)?.roomNumber}
+              Room {dutyRoomNumber}
             </p>
           )}
           {userRole === "doctor" && isOnDuty && (
@@ -102,9 +133,10 @@ const DutyToggle = () => {
           className="input-field !w-auto"
         >
           <option value="">Select room...</option>
-          {availableRooms.map((r) => (
+          {rooms.map((r) => (
             <option key={r.id} value={r.id}>
-              Room {r.roomNumber}
+              Room {r.roomNumber} ({r.nurses?.length || 0} nurse
+              {r.nurses?.length === 1 ? "" : "s"} checked in)
             </option>
           ))}
         </select>

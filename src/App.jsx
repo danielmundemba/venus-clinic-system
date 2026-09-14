@@ -35,6 +35,10 @@ const MedicalRecordDetails = lazy(
 const UserManagement = lazy(() => import("./pages/admin/UserManagement"));
 const MedicationCatalog = lazy(() => import("./pages/admin/MedicationCatalog"));
 const ProfilePage = lazy(() => import("./pages/profile/ProfilePage"));
+const PatientRegistrationPage = lazy(
+  () => import("./pages/patients/PatientRegistrationPage"),
+);
+const CreateStaffPage = lazy(() => import("./pages/admin/CreateStaffPage"));
 
 // My-Health
 const MyDashboard = lazy(() => import("./pages/profile/MyDashboard"));
@@ -104,6 +108,17 @@ function App() {
                   <ProtectedRoute allowedRoles={STAFF_ROLES}>
                     <Suspense fallback={<PageSkeleton variant="detail" />}>
                       <PatientDetails />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/patients/register"
+                element={
+                  <ProtectedRoute allowedRoles={["admin", "receptionist"]}>
+                    <Suspense fallback={<PageSkeleton variant="form" />}>
+                      <PatientRegistrationPage />
                     </Suspense>
                   </ProtectedRoute>
                 }
@@ -185,6 +200,16 @@ function App() {
                   <ProtectedRoute allowedRoles={["admin"]}>
                     <Suspense fallback={<PageSkeleton variant="table" />}>
                       <UserManagement />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/users/create"
+                element={
+                  <ProtectedRoute allowedRoles={["admin"]}>
+                    <Suspense fallback={<PageSkeleton variant="form" />}>
+                      <CreateStaffPage />
                     </Suspense>
                   </ProtectedRoute>
                 }

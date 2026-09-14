@@ -65,6 +65,22 @@ const QuickAction = ({ icon: Icon, label, onClick }) => (
   </button>
 );
 
+// What each role's Recent Activity entry should read — never surfaces the
+// diagnosis to roles that shouldn't see it (matches the record-detail
+// visibility matrix: only admin/doctor see clinical diagnosis text).
+const activityLabel = (record, role) => {
+  if (role === "admin" || role === "doctor")
+    return record.doctor?.diagnosis || "Visit completed";
+  if (role === "nurse") return "Vitals recorded";
+  if (role === "pharmacist") {
+    const count = record.pharmacy?.medications?.length || 0;
+    return count > 0
+      ? `${count} medication${count === 1 ? "" : "s"} dispensed`
+      : "Visit completed";
+  }
+  return "Visit completed";
+};
+
 const UnifiedDashboard = () => {
   const navigate = useNavigate();
   const { user, userRole, isAdmin, isDoctor, isReceptionist, isNurse } =
@@ -127,8 +143,25 @@ const UnifiedDashboard = () => {
         waitingBilling: countByStatus("billing"),
       });
 
-      const recent = completedToday.slice(0, 5);
-      const patientIds = [...new Set(recent.map((r) => r.patientId))];
+      // Only show visits *this person* actually touched today — a
+      // pharmacist shouldn't see activity for patients they never
+      // dispensed medication to, and admin still sees everything.
+      const identity = user?.displayName || user?.email;
+      const relevantToMe = (record) => {
+        if (isAdmin) return true;
+        if (isDoctor) return record.doctor?.recordedBy === identity;
+        if (isNurse) return record.vitals?.recordedBy === identity;
+        if (isPharmacist) return record.pharmacy?.dispensedBy === identity;
+        if (isReceptionist)
+          return (
+            record.reception?.checkedInBy === identity ||
+            record.billing?.billedBy === identity
+          );
+        return false;
+      };
+
+      const mine = completedToday.filter(relevantToMe).slice(0, 5);
+      const patientIds = [...new Set(mine.map((r) => r.patientId))];
       const nameMap = {};
       await Promise.all(
         patientIds.map(async (pid) => {
@@ -139,10 +172,12 @@ const UnifiedDashboard = () => {
           }
         }),
       );
+
       setRecentActivity(
-        recent.map((r) => ({
+        mine.map((r) => ({
           ...r,
           patientName: nameMap[r.patientId] || "Unknown patient",
+          label: activityLabel(r, userRole),
         })),
       );
     } catch (err) {
@@ -151,7 +186,15 @@ const UnifiedDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, isReceptionist]);
+  }, [
+    isAdmin,
+    isReceptionist,
+    isDoctor,
+    isNurse,
+    isPharmacist,
+    userRole,
+    user,
+  ]);
 
   useEffect(() => {
     loadDashboard();
@@ -359,7 +402,6 @@ const UnifiedDashboard = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-venus-text-primary">
           Good{" "}
@@ -375,31 +417,24 @@ const UnifiedDashboard = () => {
         </p>
       </div>
 
-      {/* On-duty toggle — doctors and nurses only */}
       {(isDoctor || isNurse) && <DutyToggle />}
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, index) => (
           <StatCard key={index} {...stat} />
         ))}
       </div>
 
-      {/* Doctor/Nurse Queue Widget */}
       {(isDoctor || isNurse) && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <DoctorQueue
               compact={false}
-              onStartConsultation={(appointmentId) => {
-                navigate(`/appointments?action=consult&id=${appointmentId}`);
-              }}
-              onViewRecord={(patientId) => {
-                navigate(`/patients/${patientId}`);
-              }}
-              onViewAll={() => {
-                navigate("/appointments");
-              }}
+              onStartConsultation={(appointmentId) =>
+                navigate(`/appointments?action=consult&id=${appointmentId}`)
+              }
+              onViewRecord={(patientId) => navigate(`/patients/${patientId}`)}
+              onViewAll={() => navigate("/appointments")}
             />
           </div>
           <div className="space-y-4">
@@ -415,7 +450,6 @@ const UnifiedDashboard = () => {
         </div>
       )}
 
-      {/* Admin/Receptionist/Pharmacist Quick Actions */}
       {(isAdmin || isReceptionist || isPharmacist) && (
         <div>
           <h2 className="text-lg font-semibold text-venus-text-primary mb-4">
@@ -429,11 +463,10 @@ const UnifiedDashboard = () => {
         </div>
       )}
 
-      {/* Recent Activity — real completions from today */}
       <div className="bg-venus-bg-secondary border border-venus-border rounded-xl p-5">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-venus-text-primary">
-            Recent Activity
+            {isAdmin ? "Recent Activity" : "Your Recent Activity"}
           </h2>
           <button
             onClick={() => navigate("/medical-records")}
@@ -445,7 +478,7 @@ const UnifiedDashboard = () => {
         </div>
         {recentActivity.length === 0 ? (
           <p className="text-venus-text-muted text-sm italic">
-            No visits completed yet today.
+            Nothing completed by you today yet.
           </p>
         ) : (
           <div className="space-y-3">
@@ -459,8 +492,7 @@ const UnifiedDashboard = () => {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-venus-text-primary">
-                    {record.doctor?.diagnosis || "Visit completed"} —{" "}
-                    {record.patientName}
+                    {record.label} — {record.patientName}
                   </p>
                   <p className="text-xs text-venus-text-muted">
                     {formatDate(record.visitDate)} • K

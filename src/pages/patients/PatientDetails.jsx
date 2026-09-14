@@ -8,6 +8,7 @@ import {
   getPatientMedicalRecords,
   getActivePatientRecord,
   createMedicalRecord,
+  generatePatientNumberForUser,
 } from "../../firebase/db";
 import { formatDate, calculateAge, formatPhone } from "../../utils/formatters";
 import {
@@ -29,6 +30,8 @@ import {
   Pill,
   Eye,
   IdCard,
+  Lock,
+  Plus,
 } from "lucide-react";
 
 const PatientDetails = () => {
@@ -41,6 +44,10 @@ const PatientDetails = () => {
   const [pastRecords, setPastRecords] = useState([]);
   const [loadingRecords, setLoadingRecords] = useState(true);
   const [startingVisit, setStartingVisit] = useState(false);
+  const [generatingId, setGeneratingId] = useState(false);
+
+  const canSeeDiagnosis = ["admin", "doctor"].includes(userRole);
+  const canManageIds = ["admin", "receptionist"].includes(userRole);
 
   useEffect(() => {
     loadPatient();
@@ -84,6 +91,19 @@ const PatientDetails = () => {
   };
 
   const canCreateVisit = () => ["admin", "receptionist"].includes(userRole);
+
+  const handleGenerateId = async () => {
+    setGeneratingId(true);
+    try {
+      const patientNumber = await generatePatientNumberForUser(id);
+      setPatient((prev) => ({ ...prev, patientNumber }));
+    } catch (error) {
+      console.error("Failed to generate Patient ID:", error);
+      alert("Failed to generate Patient ID: " + error.message);
+    } finally {
+      setGeneratingId(false);
+    }
+  };
 
   const handleCreateVisit = async () => {
     setStartingVisit(true);
@@ -155,9 +175,8 @@ const PatientDetails = () => {
     },
   };
 
-  const getInitials = (firstName, lastName) => {
-    return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "P";
-  };
+  const getInitials = (firstName, lastName) =>
+    `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "P";
 
   const roleCfg = isStaffPatient ? staffRoleConfig[patient.role] : null;
   const RoleIcon = roleCfg?.icon;
@@ -172,7 +191,6 @@ const PatientDetails = () => {
         Back to Patients
       </button>
 
-      {/* Header Card */}
       <div className="card">
         <div className="flex items-start gap-6">
           <div className="w-20 h-20 rounded-2xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
@@ -194,11 +212,27 @@ const PatientDetails = () => {
                 </div>
               )}
             </div>
-            <p className="text-venus-text-muted mt-1 flex items-center gap-1.5">
-              <IdCard className="w-3.5 h-3.5" />
-              {patient.patientNumber || "No ID assigned"} • Registered{" "}
-              {formatDate(patient.createdAt)}
-            </p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <p className="text-venus-text-muted flex items-center gap-1.5">
+                <IdCard className="w-3.5 h-3.5" />
+                {patient.patientNumber || "No ID assigned"} • Registered{" "}
+                {formatDate(patient.createdAt)}
+              </p>
+              {!patient.patientNumber && canManageIds && (
+                <button
+                  onClick={handleGenerateId}
+                  disabled={generatingId}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-venus-primary-500/15 hover:bg-venus-primary-500/25 text-venus-primary-400 rounded-lg text-xs font-medium transition-colors disabled:opacity-60"
+                >
+                  {generatingId ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Plus className="w-3.5 h-3.5" />
+                  )}
+                  Generate Patient ID
+                </button>
+              )}
+            </div>
             <div className="flex flex-wrap gap-2 mt-3">
               {displayAge !== null && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border bg-sky-500/15 text-sky-400 border-sky-500/30">
@@ -248,7 +282,6 @@ const PatientDetails = () => {
         </div>
       </div>
 
-      {/* Info Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card">
           <h3 className="text-lg font-semibold text-venus-text-primary mb-4 flex items-center gap-2">
@@ -339,23 +372,16 @@ const PatientDetails = () => {
         </div>
       </div>
 
-      {/* Account Info */}
       <div className="card">
         <h3 className="text-lg font-semibold text-venus-text-primary mb-4 flex items-center gap-2">
           <Shield className="w-5 h-5 text-amber-400" />
           Account Information
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-3 bg-venus-bg-tertiary rounded-lg">
             <p className="text-xs text-venus-text-muted mb-1">System Role</p>
             <p className="text-sm font-medium text-venus-text-primary capitalize">
               {isStaffPatient ? `${patient.role} (Staff)` : "Patient"}
-            </p>
-          </div>
-          <div className="p-3 bg-venus-bg-tertiary rounded-lg">
-            <p className="text-xs text-venus-text-muted mb-1">Auth UID</p>
-            <p className="text-sm font-medium text-venus-text-primary font-mono">
-              {patient.id}
             </p>
           </div>
           <div className="p-3 bg-venus-bg-tertiary rounded-lg">
@@ -369,7 +395,6 @@ const PatientDetails = () => {
         </div>
       </div>
 
-      {/* Emergency Contact */}
       {(displayEmergencyName || displayEmergencyPhone) && (
         <div className="card">
           <h3 className="text-lg font-semibold text-venus-text-primary mb-4 flex items-center gap-2">
@@ -397,7 +422,6 @@ const PatientDetails = () => {
         </div>
       )}
 
-      {/* Past Medical Records */}
       <div className="card">
         <h3 className="text-lg font-semibold text-venus-text-primary mb-4 flex items-center gap-2">
           <FileText className="w-5 h-5 text-violet-400" />
@@ -413,6 +437,12 @@ const PatientDetails = () => {
           </p>
         ) : (
           <div className="space-y-2">
+            {!canSeeDiagnosis && (
+              <p className="text-xs text-venus-text-muted flex items-center gap-1.5 mb-2">
+                <Lock className="w-3.5 h-3.5" />
+                Diagnosis details are only visible to doctors and admins
+              </p>
+            )}
             {pastRecords.map((record) => (
               <div
                 key={record.id}
@@ -426,7 +456,7 @@ const PatientDetails = () => {
                       • {record.visitTime}
                     </span>
                   </div>
-                  {record.doctor?.diagnosis && (
+                  {canSeeDiagnosis && record.doctor?.diagnosis && (
                     <p className="text-xs text-venus-text-muted mt-1 truncate">
                       {record.doctor.diagnosis}
                     </p>
@@ -447,7 +477,6 @@ const PatientDetails = () => {
         )}
       </div>
 
-      {/* Action Buttons */}
       <div className="flex flex-wrap gap-4">
         {canCreateVisit() && (
           <button
@@ -460,13 +489,9 @@ const PatientDetails = () => {
             ) : (
               <FileText className="w-5 h-5" />
             )}
-            Create Medical Record
+            Check In Patient for New Visit
           </button>
         )}
-        <button className="flex items-center gap-2 px-4 py-2.5 border border-venus-border text-venus-text-primary rounded-lg text-sm font-medium hover:bg-venus-bg-elevated transition-all">
-          <Calendar className="w-5 h-5" />
-          Schedule Appointment
-        </button>
       </div>
     </div>
   );
