@@ -8,7 +8,6 @@ import {
   getPatientMedicalRecords,
   getActivePatientRecord,
   createMedicalRecord,
-  getMedications,
 } from "../../firebase/db";
 import { formatDate, calculateAge, formatPhone } from "../../utils/formatters";
 import {
@@ -29,19 +28,8 @@ import {
   Stethoscope,
   Pill,
   Eye,
+  IdCard,
 } from "lucide-react";
-
-const [medicationCatalog, setMedicationCatalog] = useState([]);
-
-const emptyMedication = {
-  medicationId: "",
-  name: "",
-  dosage: "",
-  quantity: "",
-  instructions: "",
-  unitPrice: "",
-  price: "",
-};
 
 const PatientDetails = () => {
   const { id } = useParams();
@@ -100,8 +88,6 @@ const PatientDetails = () => {
   const handleCreateVisit = async () => {
     setStartingVisit(true);
     try {
-      // If the patient already has a visit in progress, jump into that
-      // instead of starting a second one.
       const active = await getActivePatientRecord(id);
       if (active) {
         navigate(`/medical-records/${id}/${active.id}`);
@@ -208,8 +194,9 @@ const PatientDetails = () => {
                 </div>
               )}
             </div>
-            <p className="text-venus-text-muted mt-1">
-              Patient ID: {patient.id} • Registered{" "}
+            <p className="text-venus-text-muted mt-1 flex items-center gap-1.5">
+              <IdCard className="w-3.5 h-3.5" />
+              {patient.patientNumber || "No ID assigned"} • Registered{" "}
               {formatDate(patient.createdAt)}
             </p>
             <div className="flex flex-wrap gap-2 mt-3">

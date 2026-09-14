@@ -14,6 +14,7 @@ import {
   Pill,
 } from "lucide-react";
 import { logoutUser } from "../../firebase/auth";
+import { DoorOpen } from "lucide-react";
 
 // Staff-facing navigation. 'patient' is intentionally never listed in any
 // of these `roles` arrays — patient accounts only ever see the personal
@@ -53,6 +54,12 @@ const navItems = [
     path: "/admin/medications",
     label: "Medication Catalog",
     icon: Pill,
+    roles: ["admin"],
+  },
+  {
+    path: "/admin/nurse-rooms",
+    label: "Nurse Rooms",
+    icon: DoorOpen,
     roles: ["admin"],
   },
   {

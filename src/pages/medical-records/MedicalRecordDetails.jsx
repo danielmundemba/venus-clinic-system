@@ -14,6 +14,7 @@ import {
   getMedications,
   getOnDutyStaff,
   getAllNurseRooms,
+  getAvailableNurseRooms,
   reassignDoctor,
   reassignNurseRoom,
   getPatientMedicalRecords,
@@ -42,6 +43,7 @@ import {
   Send,
   Lock,
   DoorOpen,
+  UserCog,
 } from "lucide-react";
 
 const statusConfig = {
@@ -128,10 +130,17 @@ const MedicalRecordDetails = () => {
   });
 
   const [medicationCatalog, setMedicationCatalog] = useState([]);
+
+  // Room picker for "Send to Nurse"
+  const [showRoomPicker, setShowRoomPicker] = useState(false);
+  const [availableRooms, setAvailableRooms] = useState([]);
+  const [selectedRoomId, setSelectedRoomId] = useState("");
+
+  // Assignment card reassignment controls
   const [showReassignDoctor, setShowReassignDoctor] = useState(false);
   const [onDutyDoctors, setOnDutyDoctors] = useState([]);
   const [showReassignNurse, setShowReassignNurse] = useState(false);
-  const [nurseRooms, setNurseRooms] = useState([]);
+  const [nurseRoomsForReassign, setNurseRoomsForReassign] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -184,7 +193,6 @@ const MedicalRecordDetails = () => {
             selectedServices: recordData.pharmacy.services || [],
           });
         } else if (recordData.doctor?.prescriptions?.length) {
-          // Prefill pharmacy stage from what the doctor prescribed.
           setPharmacyForm({
             medications: recordData.doctor.prescriptions.map((rx) => ({
               medicationId: rx.medicationId,
@@ -248,6 +256,17 @@ const MedicalRecordDetails = () => {
   };
   const canViewStage = (stage) => canViewStageForRole(userRole, stage);
 
+  // Assignment info (who's seeing the patient) is administrative, not
+  // clinical, so it's visible to everyone running the workflow —
+  // separate from the stage-gated clinical content above.
+  const canSeeAssignment = [
+    "admin",
+    "receptionist",
+    "nurse",
+    "doctor",
+  ].includes(userRole);
+  const canReassign = ["admin", "receptionist"].includes(userRole);
+
   const isStageActive = (stage) => record?.status === stage;
   const isStageComplete = (stage) => {
     const steps = [
@@ -267,10 +286,18 @@ const MedicalRecordDetails = () => {
     record?.doctor &&
     record.doctor.sendToPharmacy === false;
 
-  const handleSendToNurse = async () => {
+  const openSendToNurse = async () => {
+    const rooms = await getAvailableNurseRooms();
+    setAvailableRooms(rooms);
+    setSelectedRoomId(rooms[0]?.id || "");
+    setShowRoomPicker(true);
+  };
+
+  const confirmSendToNurse = async () => {
     setSaving(true);
     try {
-      await sendToNurse(patientId, recordId);
+      await sendToNurse(patientId, recordId, selectedRoomId || null);
+      setShowRoomPicker(false);
       await loadData();
     } catch (err) {
       alert("Failed to send to nurse: " + err.message);
@@ -481,6 +508,7 @@ const MedicalRecordDetails = () => {
       recordId,
       doctor.id,
       `${doctor.firstName} ${doctor.lastName}`,
+      doctor.dutyRoomNumber || null,
     );
     setShowReassignDoctor(false);
     await loadData();
@@ -489,11 +517,11 @@ const MedicalRecordDetails = () => {
   const openReassignNurse = async () => {
     setShowReassignNurse(true);
     const rooms = await getAllNurseRooms();
-    setNurseRooms(rooms.filter((r) => r.nurseOnDuty));
+    setNurseRoomsForReassign(rooms.filter((r) => r.nurseOnDuty));
   };
 
   const handleReassignNurse = async (roomId) => {
-    const room = nurseRooms.find((r) => r.id === roomId);
+    const room = nurseRoomsForReassign.find((r) => r.id === roomId);
     if (!room) return;
     await reassignNurseRoom(
       patientId,
@@ -531,7 +559,6 @@ const MedicalRecordDetails = () => {
   }
 
   const statusInfo = statusConfig[record?.status] || statusConfig.reception;
-  const canReassign = ["admin", "receptionist"].includes(userRole);
 
   return (
     <div className="space-y-6">
@@ -554,7 +581,7 @@ const MedicalRecordDetails = () => {
                 {patient.firstName} {patient.lastName}
               </h1>
               <div className="flex flex-wrap gap-3 mt-2">
-                <span className="text-sm text-venus-text-muted">
+                <span className="text-sm text-venus-text-muted font-mono">
                   {patient.patientNumber}
                 </span>
                 <span className="flex items-center gap-1 text-sm text-venus-text-muted">
@@ -578,6 +605,91 @@ const MedicalRecordDetails = () => {
           </div>
         </div>
       )}
+
+      {/* ASSIGNMENT — who the patient is with, visible regardless of clinical view restrictions */}
+      {canSeeAssignment &&
+        (record?.assignedDoctorName || record?.assignedRoomNumber) && (
+          <div className="card">
+            <div className="flex items-center gap-2 mb-3">
+              <UserCog className="w-5 h-5 text-venus-primary-400" />
+              <h3 className="text-sm font-semibold text-venus-text-primary">
+                Assignment
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-3">
+                <div>
+                  <p className="text-xs text-venus-text-muted">Doctor</p>
+                  <p className="text-sm font-medium text-venus-text-primary">
+                    {record.assignedDoctorName
+                      ? `Dr. ${record.assignedDoctorName}`
+                      : "Not yet assigned"}
+                    {record.assignedDoctorRoom &&
+                      ` — Room ${record.assignedDoctorRoom}`}
+                  </p>
+                </div>
+                {canReassign && (
+                  <button
+                    onClick={openReassignDoctor}
+                    className="text-venus-primary-400 hover:underline text-xs shrink-0"
+                  >
+                    Reassign
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-3">
+                <div>
+                  <p className="text-xs text-venus-text-muted">Nurse / Room</p>
+                  <p className="text-sm font-medium text-venus-text-primary">
+                    {record.assignedRoomNumber
+                      ? `Room ${record.assignedRoomNumber} — ${record.assignedNurseName || "Unassigned"}`
+                      : "Not yet assigned"}
+                  </p>
+                </div>
+                {canReassign && (
+                  <button
+                    onClick={openReassignNurse}
+                    className="text-venus-primary-400 hover:underline text-xs shrink-0"
+                  >
+                    Reassign
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showReassignDoctor && (
+              <select
+                onChange={(e) =>
+                  e.target.value && handleReassignDoctor(e.target.value)
+                }
+                className="input-field !w-auto mt-3"
+              >
+                <option value="">Reassign doctor to...</option>
+                {onDutyDoctors.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.firstName} {d.lastName}
+                    {d.dutyRoomNumber ? ` (Room ${d.dutyRoomNumber})` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
+            {showReassignNurse && (
+              <select
+                onChange={(e) =>
+                  e.target.value && handleReassignNurse(e.target.value)
+                }
+                className="input-field !w-auto mt-3"
+              >
+                <option value="">Reassign to room...</option>
+                {nurseRoomsForReassign.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    Room {r.roomNumber} — {r.assignedNurseName}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
 
       {canViewStage("doctor") &&
         (patient?.allergies || pastDiagnoses.length > 0) && (
@@ -692,20 +804,53 @@ const MedicalRecordDetails = () => {
                 </p>
               </div>
             )}
-            {isStageActive("reception") && canEditStage("reception") && (
-              <button
-                onClick={handleSendToNurse}
-                disabled={saving}
-                className="btn-primary flex items-center gap-2 mt-2"
-              >
-                {saving ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
+            {isStageActive("reception") &&
+              canEditStage("reception") &&
+              (showRoomPicker ? (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <select
+                    value={selectedRoomId}
+                    onChange={(e) => setSelectedRoomId(e.target.value)}
+                    className="input-field !w-auto"
+                  >
+                    {availableRooms.length === 0 ? (
+                      <option value="">No rooms available right now</option>
+                    ) : (
+                      availableRooms.map((r) => (
+                        <option key={r.id} value={r.id}>
+                          Room {r.roomNumber} — {r.assignedNurseName}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <button
+                    onClick={confirmSendToNurse}
+                    disabled={saving || !selectedRoomId}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    {saving ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => setShowRoomPicker(false)}
+                    className="btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={openSendToNurse}
+                  className="btn-primary flex items-center gap-2 mt-2"
+                >
                   <Send className="w-4 h-4" />
-                )}
-                Send to Nurse
-              </button>
-            )}
+                  Send to Nurse
+                </button>
+              ))}
           </div>
         ) : (
           <p className="text-venus-text-muted text-sm italic">
@@ -718,7 +863,7 @@ const MedicalRecordDetails = () => {
       <div
         className={`card ${isStageActive("nurse") ? "ring-2 ring-blue-500/30" : ""}`}
       >
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-4">
           <Stethoscope className="w-5 h-5 text-blue-500" />
           <h3 className="text-lg font-semibold text-venus-text-primary">
             Nurse / Vitals
@@ -727,39 +872,6 @@ const MedicalRecordDetails = () => {
             <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
           )}
         </div>
-
-        {canViewStage("nurse") && record?.assignedRoomNumber && (
-          <div className="flex items-center gap-2 mb-4 text-sm text-venus-text-muted">
-            <DoorOpen className="w-4 h-4" />
-            <span>
-              Room {record.assignedRoomNumber} —{" "}
-              {record.assignedNurseName || "Unassigned"}
-            </span>
-            {canReassign && (
-              <button
-                onClick={openReassignNurse}
-                className="text-venus-primary-400 hover:underline text-xs"
-              >
-                Reassign
-              </button>
-            )}
-          </div>
-        )}
-        {showReassignNurse && (
-          <select
-            onChange={(e) =>
-              e.target.value && handleReassignNurse(e.target.value)
-            }
-            className="input-field !w-auto mb-4"
-          >
-            <option value="">Reassign to...</option>
-            {nurseRooms.map((r) => (
-              <option key={r.id} value={r.id}>
-                Room {r.roomNumber} — {r.assignedNurseName}
-              </option>
-            ))}
-          </select>
-        )}
 
         {!canViewStage("nurse") ? (
           <RestrictedNotice />
@@ -904,7 +1016,7 @@ const MedicalRecordDetails = () => {
       <div
         className={`card ${isStageActive("doctor") ? "ring-2 ring-purple-500/30" : ""}`}
       >
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-4">
           <Stethoscope className="w-5 h-5 text-purple-500" />
           <h3 className="text-lg font-semibold text-venus-text-primary">
             Doctor / Diagnosis
@@ -921,35 +1033,6 @@ const MedicalRecordDetails = () => {
             )}
           </div>
         </div>
-
-        {canViewStage("doctor") && record?.assignedDoctorName && (
-          <div className="flex items-center gap-2 mb-4 text-sm text-venus-text-muted">
-            <span>Assigned to Dr. {record.assignedDoctorName}</span>
-            {canReassign && (
-              <button
-                onClick={openReassignDoctor}
-                className="text-venus-primary-400 hover:underline text-xs"
-              >
-                Reassign
-              </button>
-            )}
-          </div>
-        )}
-        {showReassignDoctor && (
-          <select
-            onChange={(e) =>
-              e.target.value && handleReassignDoctor(e.target.value)
-            }
-            className="input-field !w-auto mb-4"
-          >
-            <option value="">Reassign to...</option>
-            {onDutyDoctors.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.firstName} {d.lastName}
-              </option>
-            ))}
-          </select>
-        )}
 
         {!canViewStage("doctor") ? (
           <RestrictedNotice />

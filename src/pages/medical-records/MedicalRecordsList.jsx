@@ -1,14 +1,18 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { collectionGroup, query, where, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../../firebase/config';
-import { useAuth } from '../../context/AuthContext';
-import { getRecentlyCompletedRecords } from '../../firebase/db';
-import { 
-  ClipboardList, 
-  Eye, 
-  Loader2, 
-  User, 
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "../../firebase/config";
+import { useAuth } from "../../context/AuthContext";
+import {
+  getActiveMedicalRecords,
+  getRecentlyCompletedRecords,
+} from "../../firebase/db";
+import RowActionsMenu from "../../components/common/RowActionsMenu";
+import {
+  ClipboardList,
+  Eye,
+  Loader2,
+  User,
   Calendar,
   Clock,
   Stethoscope,
@@ -16,17 +20,43 @@ import {
   CreditCard,
   CheckCircle2,
   AlertCircle,
-  Filter,
-  Plus
-} from 'lucide-react';
+  Plus,
+  Search,
+  X,
+  History,
+} from "lucide-react";
 
 const statusConfig = {
-  reception: { label: 'Reception', color: 'bg-amber-500/10 text-amber-500 border-amber-500/20', icon: ClipboardList },
-  nurse: { label: 'Nurse/Vitals', color: 'bg-blue-500/10 text-blue-500 border-blue-500/20', icon: Stethoscope },
-  doctor: { label: 'Doctor', color: 'bg-purple-500/10 text-purple-500 border-purple-500/20', icon: Stethoscope },
-  pharmacy: { label: 'Pharmacy', color: 'bg-green-500/10 text-green-500 border-green-500/20', icon: Pill },
-  billing: { label: 'Billing', color: 'bg-orange-500/10 text-orange-500 border-orange-500/20', icon: CreditCard },
-  completed: { label: 'Completed', color: 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20', icon: CheckCircle2 },
+  reception: {
+    label: "Reception",
+    color: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+    icon: ClipboardList,
+  },
+  nurse: {
+    label: "Nurse/Vitals",
+    color: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    icon: Stethoscope,
+  },
+  doctor: {
+    label: "Doctor",
+    color: "bg-purple-500/10 text-purple-500 border-purple-500/20",
+    icon: Stethoscope,
+  },
+  pharmacy: {
+    label: "Pharmacy",
+    color: "bg-green-500/10 text-green-500 border-green-500/20",
+    icon: Pill,
+  },
+  billing: {
+    label: "Billing",
+    color: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+    icon: CreditCard,
+  },
+  completed: {
+    label: "Completed",
+    color: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+    icon: CheckCircle2,
+  },
 };
 
 const MedicalRecordsList = () => {
@@ -35,71 +65,55 @@ const MedicalRecordsList = () => {
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [indexUrl, setIndexUrl] = useState(null);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadRecords();
-  }, [statusFilter]);
+  }, [showCompleted]);
 
   const loadRecords = async () => {
     setLoading(true);
     setError(null);
-    setIndexUrl(null);
 
     try {
-      let recordsData;
+      const recordsData = showCompleted
+        ? await getRecentlyCompletedRecords(
+            new Date(Date.now() - 24 * 60 * 60 * 1000),
+          )
+        : await getActiveMedicalRecords();
 
-      if (statusFilter === 'completed') {
-        // Completed tab only shows visits closed in the last 24 hours.
-        const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        recordsData = await getRecentlyCompletedRecords(since);
-      } else {
-        const recordsQuery = statusFilter === 'all'
-          ? query(
-              collectionGroup(db, 'MedicalRecords'),
-              where('status', 'in', ['reception', 'nurse', 'doctor', 'pharmacy', 'billing']),
-              orderBy('createdAt', 'desc')
-            )
-          : query(
-              collectionGroup(db, 'MedicalRecords'),
-              where('status', '==', statusFilter),
-              orderBy('createdAt', 'desc')
-            );
-
-        const snapshot = await getDocs(recordsQuery);
-        recordsData = snapshot.docs.map(d => {
-          const pathParts = d.ref.path.split('/');
-          return { id: d.id, patientId: pathParts[1], ...d.data() };
-        });
-      }
-
-      // Fetch patient names
-      const patientIds = [...new Set(recordsData.map(r => r.patientId))];
+      const patientIds = [...new Set(recordsData.map((r) => r.patientId))];
       const patientMap = {};
 
-      await Promise.all(patientIds.map(async (pid) => {
-        const patientDoc = await getDoc(doc(db, 'users', pid));
-        if (patientDoc.exists()) {
-          const data = patientDoc.data();
-          patientMap[pid] = {
-            name: `${data.firstName} ${data.lastName}`,
-            phone: data.phone,
-          };
-        }
-      }));
+      await Promise.all(
+        patientIds.map(async (pid) => {
+          const patientDoc = await getDoc(doc(db, "users", pid));
+          if (patientDoc.exists()) {
+            const data = patientDoc.data();
+            patientMap[pid] = {
+              name: `${data.firstName} ${data.lastName}`,
+              phone: data.phone,
+              patientNumber: data.patientNumber,
+            };
+          }
+        }),
+      );
 
-      setRecords(recordsData.map(r => ({
-        ...r,
-        patientName: patientMap[r.patientId]?.name || 'Unknown',
-        patientPhone: patientMap[r.patientId]?.phone || '',
-      })));
+      setRecords(
+        recordsData.map((r) => ({
+          ...r,
+          patientName: patientMap[r.patientId]?.name || "Unknown",
+          patientPhone: patientMap[r.patientId]?.phone || "",
+          patientNumber: patientMap[r.patientId]?.patientNumber || "",
+        })),
+      );
     } catch (error) {
-      console.error('Failed to load medical records:', error);
-
-      if (error.message && error.message.includes('index')) {
-        setError('Firestore index required for this query.');
-        setIndexUrl('https://console.firebase.google.com/project/venus-clinic-system/firestore/indexes');
+      console.error("Failed to load medical records:", error);
+      if (error.message && error.message.includes("index")) {
+        setError(
+          "Firestore index required for this query — check the console for a direct link to create it.",
+        );
       } else {
         setError(`Failed to load records: ${error.message}`);
       }
@@ -108,63 +122,80 @@ const MedicalRecordsList = () => {
     }
   };
 
-  const canCreateVisit = () => ['admin', 'receptionist'].includes(userRole);
+  const filteredRecords = records.filter((r) => {
+    if (!searchQuery) return true;
+    const term = searchQuery.toLowerCase();
+    return (
+      r.patientName.toLowerCase().includes(term) ||
+      r.patientNumber.toLowerCase().includes(term) ||
+      r.patientPhone.includes(searchQuery)
+    );
+  });
+
+  const canCreateVisit = () => ["admin", "receptionist"].includes(userRole);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-venus-text-primary">Medical Records</h1>
-          <p className="text-venus-text-muted mt-1">Manage patient visits and workflow</p>
+          <h1 className="text-2xl font-bold text-venus-text-primary">
+            Medical Records
+          </h1>
+          <p className="text-venus-text-muted mt-1">
+            Manage patient visits and workflow
+          </p>
         </div>
-        {canCreateVisit() && (
+        <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/medical-records/create')}
-            className="btn-primary flex items-center gap-2"
+            onClick={() => setShowCompleted((s) => !s)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+              showCompleted
+                ? "bg-venus-primary-500 text-white"
+                : "bg-venus-bg-tertiary text-venus-text-secondary hover:bg-venus-primary-500/10"
+            }`}
           >
-            <Plus className="w-5 h-5" />
-            New Visit
+            <History className="w-4 h-4" />
+            {showCompleted ? "Showing Completed (24h)" : "View Completed Today"}
           </button>
-        )}
+          {canCreateVisit() && (
+            <button
+              onClick={() => navigate("/medical-records/create")}
+              className="btn-primary flex items-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              New Visit
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
         <div className="card bg-venus-danger/5 border-venus-danger/20">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-venus-danger flex-shrink-0 mt-0.5" />
-            <div className="flex-1">
-              <p className="text-sm text-venus-danger font-medium">{error}</p>
-              {indexUrl && (
-                <a href={indexUrl} target="_blank" rel="noopener noreferrer"
-                  className="text-sm text-venus-primary-400 underline mt-1 inline-block">
-                  Create required Firestore index →
-                </a>
-              )}
-            </div>
+            <p className="text-sm text-venus-danger font-medium">{error}</p>
           </div>
         </div>
       )}
 
       <div className="card">
-        <div className="flex items-center gap-2 mb-3">
-          <Filter className="w-4 h-4 text-venus-text-muted" />
-          <span className="text-sm font-medium text-venus-text-secondary">Filter by Status</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => setStatusFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-              statusFilter === 'all' ? 'bg-venus-primary-500 text-white' : 'bg-venus-bg-tertiary text-venus-text-secondary hover:bg-venus-primary-500/10'
-            }`}>
-            All Active
-          </button>
-          {Object.entries(statusConfig).map(([key, config]) => (
-            <button key={key} onClick={() => setStatusFilter(key)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                statusFilter === key ? 'bg-venus-primary-500 text-white' : 'bg-venus-bg-tertiary text-venus-text-secondary hover:bg-venus-primary-500/10'
-              }`}>
-              {config.label}{key === 'completed' ? ' (24h)' : ''}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
+          <input
+            type="text"
+            placeholder="Search by Patient ID, name, or phone..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-10 py-2.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-venus-primary-500 focus:ring-1 focus:ring-venus-primary-500/20 transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+            >
+              <X className="w-4 h-4 text-venus-text-muted hover:text-venus-text-primary" />
             </button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -173,37 +204,69 @@ const MedicalRecordsList = () => {
           <table className="w-full">
             <thead>
               <tr className="bg-venus-bg-tertiary border-b border-venus-border">
-                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">Patient</th>
-                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">Visit</th>
-                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">Status</th>
-                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">Checked In By</th>
-                <th className="text-right text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">Actions</th>
+                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">
+                  Patient
+                </th>
+                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">
+                  Visit
+                </th>
+                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">
+                  Status
+                </th>
+                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">
+                  Assigned Doctor
+                </th>
+                <th className="text-right text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-venus-border">
               {loading ? (
-                <tr><td colSpan="5" className="px-6 py-12 text-center">
-                  <Loader2 className="w-8 h-8 text-venus-primary-400 animate-spin mx-auto" />
-                </td></tr>
-              ) : records.length === 0 ? (
-                <tr><td colSpan="5" className="px-6 py-12 text-center text-venus-text-muted">
-                  {statusFilter === 'completed' ? 'No visits completed in the last 24 hours' : 'No active medical records found'}
-                </td></tr>
+                <tr>
+                  <td colSpan="5" className="px-6 py-12 text-center">
+                    <Loader2 className="w-8 h-8 text-venus-primary-400 animate-spin mx-auto" />
+                  </td>
+                </tr>
+              ) : filteredRecords.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="5"
+                    className="px-6 py-12 text-center text-venus-text-muted"
+                  >
+                    {searchQuery
+                      ? "No matching records"
+                      : showCompleted
+                        ? "No visits completed in the last 24 hours"
+                        : "No active medical records found"}
+                  </td>
+                </tr>
               ) : (
-                records.map((record) => {
-                  const statusInfo = statusConfig[record.status] || statusConfig.reception;
+                filteredRecords.map((record) => {
+                  const statusInfo =
+                    statusConfig[record.status] || statusConfig.reception;
                   const StatusIcon = statusInfo.icon;
 
                   return (
-                    <tr key={record.id} className="hover:bg-venus-bg-tertiary/50 transition-colors">
+                    <tr
+                      key={record.id}
+                      onClick={() =>
+                        navigate(
+                          `/medical-records/${record.patientId}/${record.id}`,
+                        )
+                      }
+                      className="hover:bg-venus-bg-tertiary/50 transition-colors cursor-pointer"
+                    >
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-venus-primary-500/20 rounded-full flex items-center justify-center">
                             <User className="w-5 h-5 text-venus-primary-400" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-venus-text-primary">{record.patientName}</p>
-                            <p className="text-xs text-venus-text-muted">{record.patientPhone}</p>
+                            <p className="text-sm font-medium text-venus-text-primary">
+                              {record.patientName}
+                            </p>
+                            <p className="text-xs text-venus-text-muted font-mono">
+                              {record.patientNumber || "—"}
+                            </p>
                           </div>
                         </div>
                       </td>
@@ -220,20 +283,36 @@ const MedicalRecordsList = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border ${statusInfo.color}`}>
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full border ${statusInfo.color}`}
+                        >
                           <StatusIcon className="w-3.5 h-3.5" />
                           {statusInfo.label}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className="text-sm text-venus-text-secondary">{record.reception?.checkedInBy || '—'}</span>
+                        <span className="text-sm text-venus-text-secondary">
+                          {record.assignedDoctorName
+                            ? `Dr. ${record.assignedDoctorName}`
+                            : "—"}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 text-right">
-                        <button onClick={() => navigate(`/medical-records/${record.patientId}/${record.id}`)}
-                          className="p-2 text-venus-text-muted hover:text-venus-primary-400 hover:bg-venus-primary-500/10 rounded-lg transition-colors"
-                          title="View Record">
-                          <Eye className="w-5 h-5" />
-                        </button>
+                      <td
+                        className="px-6 py-4 text-right"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <RowActionsMenu
+                          actions={[
+                            {
+                              label: "View Record",
+                              icon: Eye,
+                              onClick: () =>
+                                navigate(
+                                  `/medical-records/${record.patientId}/${record.id}`,
+                                ),
+                            },
+                          ]}
+                        />
                       </td>
                     </tr>
                   );

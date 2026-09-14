@@ -41,6 +41,8 @@ const MyDashboard = lazy(() => import("./pages/profile/MyDashboard"));
 const MyAppointments = lazy(() => import("./pages/profile/MyAppointments"));
 const MyRecordsBilling = lazy(() => import("./pages/profile/MyRecordsBilling"));
 
+const NurseRooms = lazy(() => import("./pages/admin/NurseRooms"));
+
 // Every staff role that should ever see the operational side of the app.
 // Kept as one constant so /dashboard and friends can't drift out of sync.
 const STAFF_ROLES = ["admin", "doctor", "receptionist", "nurse", "pharmacist"];
@@ -131,6 +133,16 @@ function App() {
                   <ProtectedRoute allowedRoles={["admin", "receptionist"]}>
                     <Suspense fallback={<PageSkeleton variant="form" />}>
                       <CreateMedicalRecord />
+                    </Suspense>
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin/nurse-rooms"
+                element={
+                  <ProtectedRoute allowedRoles={["admin"]}>
+                    <Suspense fallback={<PageSkeleton variant="table" />}>
+                      <NurseRooms />
                     </Suspense>
                   </ProtectedRoute>
                 }
