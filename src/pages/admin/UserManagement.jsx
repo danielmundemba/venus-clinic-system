@@ -59,7 +59,8 @@ const UserManagement = () => {
       value: "admin",
       label: "Admin",
       icon: Shield,
-      color: "bg-violet-500/15 text-violet-400 border-violet-500/30",
+      color:
+        "bg-venus-primary-500/15 text-venus-primary-400 border-venus-primary-500/30",
     },
     {
       value: "doctor",
@@ -244,7 +245,7 @@ const UserManagement = () => {
         title: "Total Staff",
         value: staffUsers.length.toLocaleString(),
         icon: Users,
-        color: "bg-violet-500/20 text-violet-400",
+        color: "bg-venus-primary-500/20 text-venus-primary-400",
       },
       {
         title: "Active Staff",
@@ -327,7 +328,7 @@ const UserManagement = () => {
         </div>
         <button
           onClick={() => navigate("/admin/users/create")}
-          className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-venus-primary-500 hover:bg-venus-primary-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
         >
           <Plus className="w-4 h-4" />
           Create Staff Account
@@ -356,7 +357,7 @@ const UserManagement = () => {
                   }}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                     roleFilter === "all"
-                      ? "bg-violet-500 text-white shadow-sm"
+                      ? "bg-venus-primary-500 text-white shadow-sm"
                       : "bg-venus-bg-tertiary text-venus-text-muted hover:bg-venus-bg-elevated hover:text-venus-text-primary"
                   }`}
                 >
@@ -371,7 +372,7 @@ const UserManagement = () => {
                     }}
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                       roleFilter === role.value
-                        ? "bg-violet-500 text-white shadow-sm"
+                        ? "bg-venus-primary-500 text-white shadow-sm"
                         : "bg-venus-bg-tertiary text-venus-text-muted hover:bg-venus-bg-elevated hover:text-venus-text-primary"
                     }`}
                   >
@@ -392,7 +393,7 @@ const UserManagement = () => {
                   }}
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                     statusFilter === "all"
-                      ? "bg-violet-500 text-white shadow-sm"
+                      ? "bg-venus-primary-500 text-white shadow-sm"
                       : "bg-venus-bg-tertiary text-venus-text-muted hover:bg-venus-bg-elevated hover:text-venus-text-primary"
                   }`}
                 >
@@ -439,7 +440,7 @@ const UserManagement = () => {
                 setSearchQuery(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-10 pr-10 py-2 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/20 transition-all"
+              className="w-full pl-10 pr-10 py-2 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary placeholder-venus-text-muted focus:outline-none focus:border-venus-primary-500 focus:ring-1 focus:ring-venus-primary-500/20 transition-all"
             />
             {searchQuery && (
               <button
@@ -475,7 +476,7 @@ const UserManagement = () => {
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-venus-primary-500"></div>
           </div>
         ) : filteredUsers.length === 0 ? (
           <div className="text-center py-16">
@@ -528,7 +529,7 @@ const UserManagement = () => {
                       >
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 text-sm font-bold">
+                            <div className="w-10 h-10 rounded-full bg-venus-primary-500/20 flex items-center justify-center text-venus-primary-400 text-sm font-bold">
                               {getInitials(user.firstName, user.lastName)}
                             </div>
                             <div>
@@ -550,7 +551,7 @@ const UserManagement = () => {
                                   handleRoleUpdate(user.id, e.target.value)
                                 }
                                 disabled={updateLoading}
-                                className="px-3 py-1.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary focus:outline-none focus:border-violet-500"
+                                className="px-3 py-1.5 bg-venus-bg-tertiary border border-venus-border rounded-lg text-sm text-venus-text-primary focus:outline-none focus:border-venus-primary-500"
                                 autoFocus
                               >
                                 {allRoles.map((role) => (
@@ -674,7 +675,7 @@ const UserManagement = () => {
                         onClick={() => setCurrentPage(page)}
                         className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
                           currentPage === page
-                            ? "bg-violet-500 text-white shadow-sm"
+                            ? "bg-venus-primary-500 text-white shadow-sm"
                             : "border border-venus-border hover:bg-venus-bg-elevated text-venus-text-primary"
                         }`}
                       >

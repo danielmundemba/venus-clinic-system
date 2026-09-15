@@ -179,7 +179,7 @@ const CreateStaffPage = () => {
       <form onSubmit={handleCreateUser} className="space-y-6">
         <div className="card space-y-4">
           <h4 className="text-sm font-semibold text-venus-text-primary flex items-center gap-2">
-            <Shield className="w-4 h-4 text-violet-400" />
+            <Shield className="w-4 h-4 text-venus-primary-400" />
             Account Information
           </h4>
 
@@ -451,7 +451,7 @@ const CreateStaffPage = () => {
           <button
             type="submit"
             disabled={createLoading}
-            className="flex-1 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 px-4 py-2.5 bg-venus-primary-500 hover:bg-venus-primary-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {createLoading ? (
               <>

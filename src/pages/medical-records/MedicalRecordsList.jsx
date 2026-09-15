@@ -58,13 +58,15 @@ const statusConfig = {
   },
 };
 
-// Which workflow stage each role's queue lives at — used to default the
+// Which workflow stage(s) each role's queue lives at — used to default the
 // view to "just my part of the workflow" instead of everything at once.
+// Receptionists handle both check-in (reception) and payment (billing),
+// so their queue spans both stages.
 const ROLE_STAGE = {
-  receptionist: "reception",
-  nurse: "nurse",
-  doctor: "doctor",
-  pharmacist: "pharmacy",
+  receptionist: ["reception", "billing"],
+  nurse: ["nurse"],
+  doctor: ["doctor"],
+  pharmacist: ["pharmacy"],
 };
 
 const MedicalRecordsList = () => {
@@ -76,7 +78,7 @@ const MedicalRecordsList = () => {
   const [viewMode, setViewMode] = useState("mine"); // 'mine' | 'all' | 'completed'
   const [searchQuery, setSearchQuery] = useState("");
 
-  const myStage = ROLE_STAGE[userRole] || null;
+  const myStages = ROLE_STAGE[userRole] || null;
 
   useEffect(() => {
     loadRecords();
@@ -92,8 +94,19 @@ const MedicalRecordsList = () => {
         recordsData = await getRecentlyCompletedRecords(
           new Date(Date.now() - 24 * 60 * 60 * 1000),
         );
-      } else if (viewMode === "mine" && myStage) {
-        recordsData = await getActiveMedicalRecords(myStage);
+      } else if (viewMode === "mine" && myStages) {
+        // Fetch each stage in the role's queue and merge into one list.
+        const stageResults = await Promise.all(
+          myStages.map((stage) => getActiveMedicalRecords(stage)),
+        );
+        const merged = stageResults.flat();
+        // De-dupe in case a record could ever match more than one query.
+        const seen = new Set();
+        recordsData = merged.filter((r) => {
+          if (seen.has(r.id)) return false;
+          seen.add(r.id);
+          return true;
+        });
       } else {
         recordsData = await getActiveMedicalRecords();
       }
@@ -150,8 +163,8 @@ const MedicalRecordsList = () => {
   const canCreateVisit = () => ["admin", "receptionist"].includes(userRole);
 
   const viewLabel = {
-    mine: myStage
-      ? `My Queue (${statusConfig[myStage].label})`
+    mine: myStages
+      ? `My Queue (${myStages.map((s) => statusConfig[s].label).join(" & ")})`
       : "Active Visits",
     all: "All Active Visits",
     completed: "Completed (24h)",
@@ -174,7 +187,7 @@ const MedicalRecordsList = () => {
             onChange={(e) => setViewMode(e.target.value)}
             className="input-field !w-auto"
           >
-            {myStage && <option value="mine">{viewLabel.mine}</option>}
+            {myStages && <option value="mine">{viewLabel.mine}</option>}
             <option value="all">{viewLabel.all}</option>
             <option value="completed">{viewLabel.completed}</option>
           </select>
