@@ -54,7 +54,7 @@ const navItems = [
     path: "/admin/medications",
     label: "Medication Catalog",
     icon: Pill,
-    roles: ["admin"],
+    roles: ["pharmacist"],
   },
   {
     path: "/admin/nurse-rooms",
@@ -181,7 +181,10 @@ const Sidebar = () => {
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 text-venus-danger hover:bg-venus-danger/10 rounded-lg transition-all duration-200"
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut
+            className="w-5 h-5"
+            style={{ transform: "scaleX(-1)" }}
+          />
           <span className="font-medium">Logout</span>
         </button>
       </div>

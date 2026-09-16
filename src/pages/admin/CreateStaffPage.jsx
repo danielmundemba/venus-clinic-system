@@ -5,6 +5,7 @@ import { db } from "../../firebase/config";
 import { registerStaff } from "../../firebase/auth";
 import { useAuditLog } from "../../hooks/useAuditLog";
 import { calculateAge } from "../../utils/formatters";
+import { DEFAULT_GENERATED_PASSWORD, isStrongPassword } from "../../utils/validators";
 import {
   ArrowLeft,
   Shield,
@@ -77,9 +78,9 @@ const CreateStaffPage = () => {
         setCreateLoading(false);
         return;
       }
-      if (createForm.password && createForm.password.length < 6) {
+      if (createForm.password && !isStrongPassword(createForm.password)) {
         setCreateError(
-          "Password must be at least 6 characters, or leave it blank to use the default (123456).",
+          `Password must include [8+] characters, [a-z], [A-Z], [0-9], and at least one symbol. Or leave it blank to use the default (${DEFAULT_GENERATED_PASSWORD}).`,
         );
         setCreateLoading(false);
         return;
@@ -98,7 +99,7 @@ const CreateStaffPage = () => {
 
       const age = createForm.DOB ? calculateAge(createForm.DOB) : null;
       const usedDefaultPassword = !createForm.password;
-      const finalPassword = createForm.password || "123456";
+      const finalPassword = createForm.password || DEFAULT_GENERATED_PASSWORD;
 
       const staffData = {
         firstName: createForm.firstName,
@@ -133,7 +134,7 @@ const CreateStaffPage = () => {
         state: {
           successMessage:
             `${createForm.firstName} ${createForm.lastName} was created successfully as ${createForm.role} (${result.patientNumber}). ` +
-            `They can now log in with their email and ${usedDefaultPassword ? "the default password (123456)" : "the password you set"}.`,
+            `They can now log in with their email and ${usedDefaultPassword ? `the default password (${DEFAULT_GENERATED_PASSWORD})` : "the password you set"}.`,
         },
       });
     } catch (err) {
@@ -246,7 +247,7 @@ const CreateStaffPage = () => {
               <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
                 Password{" "}
                 <span className="text-xs font-normal text-venus-text-muted">
-                  (optional — defaults to 123456)
+                  (optional — defaults to Venus@123)
                 </span>
               </label>
               <div className="relative">
@@ -289,9 +290,9 @@ const CreateStaffPage = () => {
         <div className="card space-y-4">
           <h4 className="text-sm font-semibold text-venus-text-primary flex items-center gap-2">
             <HeartPulse className="w-4 h-4 text-rose-400" />
-            Patient Information{" "}
+            Staff Information{" "}
             <span className="text-xs font-normal text-venus-text-muted">
-              (Required — staff are also registered as patients)
+              (Required — Enter personal details for the staff being registered.)
             </span>
           </h4>
 

@@ -11,6 +11,7 @@ import { db, auth } from '../../firebase/config';
 import { useAuth } from '../../context/AuthContext';
 import { useAuditLog } from '../../hooks/useAuditLog';
 import { calculateAge } from '../../utils/formatters';
+import { isStrongPassword } from '../../utils/validators';
 import {
   User,
   Mail,
@@ -223,8 +224,8 @@ const ProfilePage = () => {
       setPasswordError('Enter your current password to confirm this change.');
       return;
     }
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters.');
+    if (!newPassword || !isStrongPassword(newPassword)) {
+      setPasswordError('New password must include [8+] characters, [a-z], [A-Z], [0-9], and at least one symbol.');
       return;
     }
     if (newPassword !== confirmPassword) {

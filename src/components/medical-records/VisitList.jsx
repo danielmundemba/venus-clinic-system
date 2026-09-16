@@ -1,0 +1,162 @@
+import { useState, useEffect, useCallback } from 'react';
+import { useMedicalRecords } from '../../hooks/useMedicalRecords';
+import { formatDate } from '../../utils/formatters';
+import { 
+  Calendar, 
+  Clock, 
+  ChevronRight, 
+  Stethoscope, 
+  Activity, 
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Loader2
+} from 'lucide-react';
+
+const statusConfig = {
+  'checked-in': { 
+    label: 'Checked In', 
+    color: 'text-blue-400', 
+    bg: 'bg-blue-500/10', 
+    icon: FileText 
+  },
+  'vitals-done': { 
+    label: 'Vitals Done', 
+    color: 'text-yellow-400', 
+    bg: 'bg-yellow-500/10', 
+    icon: Activity 
+  },
+  'diagnosed': { 
+    label: 'Diagnosed', 
+    color: 'text-purple-400', 
+    bg: 'bg-purple-500/10', 
+    icon: Stethoscope 
+  },
+  'billing': { 
+    label: 'Billing', 
+    color: 'text-orange-400', 
+    bg: 'bg-orange-500/10', 
+    icon: AlertCircle 
+  },
+  'completed': { 
+    label: 'Completed', 
+    color: 'text-green-400', 
+    bg: 'bg-green-500/10', 
+    icon: CheckCircle2 
+  }
+};
+
+const VisitList = ({ patientId, onSelectVisit, onCreateVisit }) => {
+  const [records, setRecords] = useState([]);
+  const { getRecords, loading } = useMedicalRecords(patientId);
+
+  const loadRecords = useCallback(async () => {
+    try {
+      const data = await getRecords();
+      setRecords(data);
+    } catch (err) {
+      console.error('Failed to load records:', err);
+    }
+  }, [getRecords]);
+
+  useEffect(() => {
+    if (!patientId) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void loadRecords();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [patientId, loadRecords]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="w-8 h-8 text-venus-primary-400 animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-venus-text-primary">
+          Visit History ({records.length})
+        </h3>
+        <button
+          onClick={onCreateVisit}
+          className="px-4 py-2 bg-venus-primary-500 text-white rounded-lg hover:bg-venus-primary-600 transition-colors text-sm font-medium"
+        >
+          + New Visit
+        </button>
+      </div>
+
+      {records.length === 0 ? (
+        <div className="text-center p-8 bg-venus-bg-secondary rounded-lg border border-venus-border">
+          <FileText className="w-12 h-12 text-venus-text-muted mx-auto mb-3" />
+          <p className="text-venus-text-muted">No visits recorded yet</p>
+          <button
+            onClick={onCreateVisit}
+            className="mt-3 text-venus-primary-400 hover:text-venus-primary-300 text-sm"
+          >
+            Create first visit
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+          {records.map((record) => {
+            const status = statusConfig[record.status] || statusConfig['checked-in'];
+            const StatusIcon = status.icon;
+            const visitInfo = record.visitInfo || {};
+
+            return (
+              <button
+                key={record.id}
+                onClick={() => onSelectVisit(record)}
+                className="w-full p-4 bg-venus-bg-secondary rounded-lg border border-venus-border hover:border-venus-primary-500/50 transition-all text-left group"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${status.bg} ${status.color}`}>
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {status.label}
+                      </span>
+                      <span className="text-xs text-venus-text-muted">
+                        ID: {record.id.slice(-6)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm text-venus-text-secondary">
+                      <span className="flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4" />
+                        {visitInfo.visitDate ? formatDate(visitInfo.visitDate) : 'No date'}
+                      </span>
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="w-4 h-4" />
+                        {visitInfo.visitTime || 'No time'}
+                      </span>
+                      <span className="capitalize">
+                        {visitInfo.visitType || 'outpatient'}
+                      </span>
+                    </div>
+
+                    {visitInfo.chiefComplaint && (
+                      <p className="mt-2 text-sm text-venus-text-muted line-clamp-1">
+                        {visitInfo.chiefComplaint}
+                      </p>
+                    )}
+                  </div>
+
+                  <ChevronRight className="w-5 h-5 text-venus-text-muted group-hover:text-venus-primary-400 transition-colors" />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default VisitList;

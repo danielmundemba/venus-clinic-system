@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { patientSchema } from "../../utils/validators";
+import { DEFAULT_GENERATED_PASSWORD, patientSchema } from "../../utils/validators";
 import { registerPatient } from "../../firebase/auth";
 import { useAuditLog } from "../../hooks/useAuditLog";
 import { calculateAge } from "../../utils/formatters";
@@ -59,7 +59,7 @@ const PatientRegistrationPage = () => {
         allergies: data.allergies || null,
       };
 
-      const result = await registerPatient(data.email, "123456", patientData);
+      const result = await registerPatient(data.email, DEFAULT_GENERATED_PASSWORD, patientData);
 
       await logAction("create", "patient", result.uid, {
         name: `${data.firstName} ${data.lastName}`,
@@ -72,7 +72,7 @@ const PatientRegistrationPage = () => {
         state: {
           successMessage:
             `${data.firstName} ${data.lastName} was registered successfully as ${result.patientNumber}. ` +
-            `They can now log in with their email and the default password (123456).`,
+            `They can now log in with their email and the default password (${DEFAULT_GENERATED_PASSWORD}).`,
         },
       });
     } catch (error) {
@@ -109,7 +109,7 @@ const PatientRegistrationPage = () => {
           Register New Patient
         </h1>
         <p className="text-venus-text-muted mt-1">
-          Creates a patient account with default password 123456
+          Creates a patient account with the default password {DEFAULT_GENERATED_PASSWORD}
         </p>
       </div>
 
@@ -170,8 +170,7 @@ const PatientRegistrationPage = () => {
             <p className="mt-1 text-xs text-red-400">{errors.email.message}</p>
           )}
           <p className="mt-1 text-xs text-venus-text-muted">
-            This will be used for login. Default password will be set to
-            "123456".
+            This will be used for login. Default password will be set to "{DEFAULT_GENERATED_PASSWORD}".
           </p>
         </div>
 

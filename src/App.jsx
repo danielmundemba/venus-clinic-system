@@ -217,7 +217,7 @@ function App() {
               <Route
                 path="/admin/medications"
                 element={
-                  <ProtectedRoute allowedRoles={["admin"]}>
+                  <ProtectedRoute allowedRoles={["admin", "pharmacist"]}>
                     <Suspense fallback={<PageSkeleton variant="table" />}>
                       <MedicationCatalog />
                     </Suspense>

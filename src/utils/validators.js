@@ -29,6 +29,52 @@ export const appointmentSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const passwordStrengthRules = [
+  {
+    key: 'length',
+    label: 'At least 8 characters',
+    test: (value) => value.length >= 8,
+  },
+  {
+    key: 'lowercase',
+    label: 'At least one lowercase letter [a–z]',
+    test: (value) => /[a-z]/.test(value),
+  },
+  {
+    key: 'uppercase',
+    label: 'At least one uppercase letter [A–Z]',
+    test: (value) => /[A-Z]/.test(value),
+  },
+  {
+    key: 'number',
+    label: 'At least one number [0–9]',
+    test: (value) => /\d/.test(value),
+  },
+  {
+    key: 'symbol',
+    label: 'At least one symbol [&, ^, @, =, ...]',
+    test: (value) => /[^A-Za-z0-9]/.test(value),
+  },
+];
+
+export const getPasswordStrength = (password = '') => {
+  const checks = passwordStrengthRules.map((rule) => ({
+    ...rule,
+    passed: rule.test(password),
+  }));
+
+  return {
+    checks,
+    score: checks.filter((rule) => rule.passed).length,
+    total: checks.length,
+    isStrong: checks.every((rule) => rule.passed),
+  };
+};
+
+export const isStrongPassword = (password = '') => getPasswordStrength(password).isStrong;
+
+export const DEFAULT_GENERATED_PASSWORD = 'Venus@123';
+
 // Medical Record Validators
 export const medicalRecordSchema = z.object({
   patientId: z.string().min(1, 'Patient is required'),

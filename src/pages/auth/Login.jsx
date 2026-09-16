@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { loginUser } from '../../firebase/auth';
 import { useAuth } from '../../context/AuthContext';
 import { getAuthErrorMessage } from '../../utils/authErrors';
+import { getPasswordStrength } from '../../utils/validators';
 import { Activity, Eye, EyeOff } from 'lucide-react';
 
 const loginSchema = z.object({
@@ -23,10 +24,14 @@ const Login = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(loginSchema),
   });
+
+  const passwordValue = watch('password', '');
+  const passwordStrength = getPasswordStrength(passwordValue);
 
   // Redirect reactively once AuthContext confirms the user + role are resolved.
   // Do NOT navigate() from onSubmit — it races onAuthStateChanged/getUserRole.
@@ -46,7 +51,11 @@ const Login = () => {
       // No navigate() here — the useEffect above fires once
       // AuthContext's `loading` flips to false with the resolved role.
     } catch (err) {
-      setError(getAuthErrorMessage(err.code));
+      console.error('Login failed:', {
+        code: err?.code,
+        message: err?.message,
+      });
+      setError(getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -107,6 +116,33 @@ const Login = () => {
           </div>
           {errors.password && (
             <p className="mt-1 text-sm text-venus-danger">{errors.password.message}</p>
+          )}
+
+          {passwordValue && (
+            <div className="mt-3 rounded-lg border border-venus-border bg-venus-bg-tertiary p-3">
+              {passwordValue.length >= 6 && !passwordStrength.isStrong && (
+                <p className="text-xs font-medium text-amber-400">
+                  Weak password — please change it after signing in.
+                </p>
+              )}
+
+              {passwordStrength.isStrong && (
+                <p className="text-xs font-medium text-emerald-400">
+                  Strong password accepted.
+                </p>
+              )}
+
+              <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                {passwordStrength.checks.map((rule) => (
+                  <div
+                    key={rule.key}
+                    className={`${rule.passed ? 'text-emerald-400' : 'text-venus-text-muted'}`}
+                  >
+                    {rule.label}
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
