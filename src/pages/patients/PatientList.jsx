@@ -11,6 +11,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "../../firebase/config";
+import { useAuth } from "../../context/AuthContext";
 import { formatDate } from "../../utils/formatters";
 import RowActionsMenu from "../../components/common/RowActionsMenu";
 import { useAuditLog } from "../../hooks/useAuditLog";
@@ -41,6 +42,7 @@ import {
 const PatientList = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { userRole } = useAuth();
   const { logAction } = useAuditLog();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,9 @@ const PatientList = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [successMessage, setSuccessMessage] = useState("");
   const patientsPerPage = 10;
+
+  // Only receptionists check patients in and create new patient records.
+  const canRegisterPatient = userRole === "receptionist";
 
   const staffRoleConfig = {
     admin: {
@@ -251,13 +256,15 @@ const PatientList = () => {
             registered as patients.
           </p>
         </div>
-        <button
-          onClick={() => navigate("/patients/register")}
-          className="flex items-center gap-2 px-4 py-2.5 bg-venus-primary-500 hover:bg-venus-primary-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          Register Patient
-        </button>
+        {canRegisterPatient && (
+          <button
+            onClick={() => navigate("/patients/register")}
+            className="flex items-center gap-2 px-4 py-2.5 bg-venus-primary-500 hover:bg-venus-primary-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Register Patient
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

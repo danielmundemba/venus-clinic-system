@@ -41,7 +41,6 @@ import {
   ChevronRight,
   Minus,
   Send,
-  Lock,
   DoorOpen,
   UserCog,
 } from "lucide-react";
@@ -244,9 +243,11 @@ const MedicalRecordDetails = () => {
     return roleStages[userRole]?.includes(stage);
   };
 
+  // Receptionists can see the whole record (reception → billing) even
+  // though they can only *edit* the reception and billing stages.
   const canViewStageForRole = (role, stage) => {
     const viewMatrix = {
-      receptionist: ["reception", "billing"],
+      receptionist: ["reception", "nurse", "doctor", "pharmacy", "billing"],
       nurse: ["reception", "nurse"],
       doctor: ["reception", "nurse", "doctor", "pharmacy"],
       pharmacist: ["pharmacy"],
@@ -761,500 +762,748 @@ const MedicalRecordDetails = () => {
       </div>
 
       {/* RECEPTION */}
-      <div
-        className={`card ${isStageActive("reception") ? "ring-2 ring-amber-500/30" : ""}`}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <ClipboardList className="w-5 h-5 text-amber-500" />
-          <h3 className="text-lg font-semibold text-venus-text-primary">
-            Reception Check-In
-          </h3>
-          {isStageComplete("reception") && (
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
+      {canViewStage("reception") && (
+        <div
+          className={`card ${isStageActive("reception") ? "ring-2 ring-amber-500/30" : ""}`}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <ClipboardList className="w-5 h-5 text-amber-500" />
+            <h3 className="text-lg font-semibold text-venus-text-primary">
+              Reception Check-In
+            </h3>
+            {isStageComplete("reception") && (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
+            )}
+          </div>
+
+          {record?.reception ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-venus-text-muted">Checked In By</p>
+                  <p className="text-venus-text-primary font-medium">
+                    {record.reception.checkedInBy}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-venus-text-muted">Check-In Time</p>
+                  <p className="text-venus-text-primary">
+                    {formatDate(record.reception.checkedInAt)}
+                  </p>
+                </div>
+              </div>
+              {record.reception.notes && (
+                <div>
+                  <p className="text-sm text-venus-text-muted">Notes</p>
+                  <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">
+                    {record.reception.notes}
+                  </p>
+                </div>
+              )}
+              {isStageActive("reception") &&
+                canEditStage("reception") &&
+                (showRoomPicker ? (
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <select
+                      value={selectedRoomId}
+                      onChange={(e) => setSelectedRoomId(e.target.value)}
+                      className="input-field !w-auto"
+                    >
+                      {availableRooms.length === 0 ? (
+                        <option value="">No rooms available right now</option>
+                      ) : (
+                        availableRooms.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            Room {r.roomNumber} (
+                            {r.nurses.map((n) => n.nurseName).join(", ")})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <button
+                      onClick={confirmSendToNurse}
+                      disabled={saving || !selectedRoomId}
+                      className="btn-primary flex items-center gap-2"
+                    >
+                      {saving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4" />
+                      )}
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => setShowRoomPicker(false)}
+                      className="btn-secondary"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={openSendToNurse}
+                    className="btn-primary flex items-center gap-2 mt-2"
+                  >
+                    <Send className="w-4 h-4" />
+                    Send to Nurse
+                  </button>
+                ))}
+            </div>
+          ) : (
+            <p className="text-venus-text-muted text-sm italic">
+              No reception data
+            </p>
           )}
         </div>
-
-        {!canViewStage("reception") ? (
-          <RestrictedNotice />
-        ) : record?.reception ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-sm text-venus-text-muted">Checked In By</p>
-                <p className="text-venus-text-primary font-medium">
-                  {record.reception.checkedInBy}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm text-venus-text-muted">Check-In Time</p>
-                <p className="text-venus-text-primary">
-                  {formatDate(record.reception.checkedInAt)}
-                </p>
-              </div>
-            </div>
-            {record.reception.notes && (
-              <div>
-                <p className="text-sm text-venus-text-muted">Notes</p>
-                <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">
-                  {record.reception.notes}
-                </p>
-              </div>
-            )}
-            {isStageActive("reception") &&
-              canEditStage("reception") &&
-              (showRoomPicker ? (
-                <div className="flex flex-wrap items-center gap-2 mt-2">
-                  <select
-                    value={selectedRoomId}
-                    onChange={(e) => setSelectedRoomId(e.target.value)}
-                    className="input-field !w-auto"
-                  >
-                    {availableRooms.length === 0 ? (
-                      <option value="">No rooms available right now</option>
-                    ) : (
-                      availableRooms.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          Room {r.roomNumber} (
-                          {r.nurses.map((n) => n.nurseName).join(", ")})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  <button
-                    onClick={confirmSendToNurse}
-                    disabled={saving || !selectedRoomId}
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    {saving ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="w-4 h-4" />
-                    )}
-                    Confirm
-                  </button>
-                  <button
-                    onClick={() => setShowRoomPicker(false)}
-                    className="btn-secondary"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={openSendToNurse}
-                  className="btn-primary flex items-center gap-2 mt-2"
-                >
-                  <Send className="w-4 h-4" />
-                  Send to Nurse
-                </button>
-              ))}
-          </div>
-        ) : (
-          <p className="text-venus-text-muted text-sm italic">
-            No reception data
-          </p>
-        )}
-      </div>
+      )}
 
       {/* NURSE / VITALS */}
-      <div
-        className={`card ${isStageActive("nurse") ? "ring-2 ring-blue-500/30" : ""}`}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Stethoscope className="w-5 h-5 text-blue-500" />
-          <h3 className="text-lg font-semibold text-venus-text-primary">
-            Nurse / Vitals
-          </h3>
-          {isStageComplete("nurse") && (
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
+      {canViewStage("nurse") && (
+        <div
+          className={`card ${isStageActive("nurse") ? "ring-2 ring-blue-500/30" : ""}`}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Stethoscope className="w-5 h-5 text-blue-500" />
+            <h3 className="text-lg font-semibold text-venus-text-primary">
+              Nurse / Vitals
+            </h3>
+            {isStageComplete("nurse") && (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
+            )}
+          </div>
+
+          {isStageActive("nurse") && canEditStage("nurse") ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {[
+                  {
+                    label: "Temperature (°C)",
+                    key: "temperature",
+                    placeholder: "36.5",
+                  },
+                  { label: "Weight (kg)", key: "weight", placeholder: "70" },
+                  { label: "Height (cm)", key: "height", placeholder: "175" },
+                  {
+                    label: "Blood Pressure",
+                    key: "bloodPressure",
+                    placeholder: "120/80",
+                  },
+                  { label: "Pulse (bpm)", key: "pulse", placeholder: "72" },
+                  { label: "SpO2 (%)", key: "spo2", placeholder: "98" },
+                ].map((field) => (
+                  <div key={field.key}>
+                    <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                      {field.label}
+                    </label>
+                    <input
+                      type={field.key === "bloodPressure" ? "text" : "number"}
+                      step={
+                        field.key === "temperature"
+                          ? "0.1"
+                          : field.key === "weight"
+                            ? "0.1"
+                            : "1"
+                      }
+                      value={vitalsForm[field.key]}
+                      onChange={(e) =>
+                        setVitalsForm({
+                          ...vitalsForm,
+                          [field.key]: e.target.value,
+                        })
+                      }
+                      className="input-field"
+                      placeholder={field.placeholder}
+                    />
+                  </div>
+                ))}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                  Additional Notes
+                </label>
+                <textarea
+                  value={vitalsForm.notes}
+                  onChange={(e) =>
+                    setVitalsForm({ ...vitalsForm, notes: e.target.value })
+                  }
+                  rows={2}
+                  className="input-field resize-none"
+                  placeholder="Any observations..."
+                />
+              </div>
+              <p className="text-xs text-venus-text-muted">
+                A vitals check fee is added to billing automatically when you
+                save.
+              </p>
+              <button
+                onClick={handleSaveVitals}
+                disabled={saving}
+                className="btn-primary flex items-center gap-2"
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save Vitals & Send to Doctor
+              </button>
+            </div>
+          ) : record?.vitals ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <VitalDisplay
+                  icon={Thermometer}
+                  label="Temperature"
+                  value={`${record.vitals.temperature} °C`}
+                  flagged={record.vitals.flags?.some(
+                    (f) => f.field === "temperature",
+                  )}
+                />
+                <VitalDisplay
+                  icon={Weight}
+                  label="Weight"
+                  value={`${record.vitals.weight} kg`}
+                />
+                <VitalDisplay
+                  icon={Activity}
+                  label="Height"
+                  value={`${record.vitals.height} cm`}
+                />
+                <VitalDisplay
+                  icon={Heart}
+                  label="Blood Pressure"
+                  value={record.vitals.bloodPressure}
+                  flagged={record.vitals.flags?.some(
+                    (f) => f.field === "bloodPressure",
+                  )}
+                />
+                <VitalDisplay
+                  icon={Activity}
+                  label="Pulse"
+                  value={`${record.vitals.pulse} bpm`}
+                  flagged={record.vitals.flags?.some(
+                    (f) => f.field === "pulse",
+                  )}
+                />
+                <VitalDisplay
+                  icon={Activity}
+                  label="SpO2"
+                  value={`${record.vitals.spo2}%`}
+                  flagged={record.vitals.flags?.some((f) => f.field === "spo2")}
+                />
+              </div>
+              {record.vitals.notes && (
+                <div className="bg-venus-bg-tertiary rounded-lg p-3">
+                  <p className="text-sm text-venus-text-muted">Notes</p>
+                  <p className="text-venus-text-primary text-sm mt-1">
+                    {record.vitals.notes}
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-venus-text-muted">
+                Recorded by {record.vitals.recordedBy}
+              </p>
+            </div>
+          ) : (
+            <p className="text-venus-text-muted text-sm italic">
+              Waiting for vitals...
+            </p>
           )}
         </div>
-
-        {!canViewStage("nurse") ? (
-          <RestrictedNotice />
-        ) : isStageActive("nurse") && canEditStage("nurse") ? (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {[
-                {
-                  label: "Temperature (°C)",
-                  key: "temperature",
-                  placeholder: "36.5",
-                },
-                { label: "Weight (kg)", key: "weight", placeholder: "70" },
-                { label: "Height (cm)", key: "height", placeholder: "175" },
-                {
-                  label: "Blood Pressure",
-                  key: "bloodPressure",
-                  placeholder: "120/80",
-                },
-                { label: "Pulse (bpm)", key: "pulse", placeholder: "72" },
-                { label: "SpO2 (%)", key: "spo2", placeholder: "98" },
-              ].map((field) => (
-                <div key={field.key}>
-                  <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                    {field.label}
-                  </label>
-                  <input
-                    type={field.key === "bloodPressure" ? "text" : "number"}
-                    step={
-                      field.key === "temperature"
-                        ? "0.1"
-                        : field.key === "weight"
-                          ? "0.1"
-                          : "1"
-                    }
-                    value={vitalsForm[field.key]}
-                    onChange={(e) =>
-                      setVitalsForm({
-                        ...vitalsForm,
-                        [field.key]: e.target.value,
-                      })
-                    }
-                    className="input-field"
-                    placeholder={field.placeholder}
-                  />
-                </div>
-              ))}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                Additional Notes
-              </label>
-              <textarea
-                value={vitalsForm.notes}
-                onChange={(e) =>
-                  setVitalsForm({ ...vitalsForm, notes: e.target.value })
-                }
-                rows={2}
-                className="input-field resize-none"
-                placeholder="Any observations..."
-              />
-            </div>
-            <p className="text-xs text-venus-text-muted">
-              A vitals check fee is added to billing automatically when you
-              save.
-            </p>
-            <button
-              onClick={handleSaveVitals}
-              disabled={saving}
-              className="btn-primary flex items-center gap-2"
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              Save Vitals & Send to Doctor
-            </button>
-          </div>
-        ) : record?.vitals ? (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <VitalDisplay
-                icon={Thermometer}
-                label="Temperature"
-                value={`${record.vitals.temperature} °C`}
-                flagged={record.vitals.flags?.some(
-                  (f) => f.field === "temperature",
-                )}
-              />
-              <VitalDisplay
-                icon={Weight}
-                label="Weight"
-                value={`${record.vitals.weight} kg`}
-              />
-              <VitalDisplay
-                icon={Activity}
-                label="Height"
-                value={`${record.vitals.height} cm`}
-              />
-              <VitalDisplay
-                icon={Heart}
-                label="Blood Pressure"
-                value={record.vitals.bloodPressure}
-                flagged={record.vitals.flags?.some(
-                  (f) => f.field === "bloodPressure",
-                )}
-              />
-              <VitalDisplay
-                icon={Activity}
-                label="Pulse"
-                value={`${record.vitals.pulse} bpm`}
-                flagged={record.vitals.flags?.some((f) => f.field === "pulse")}
-              />
-              <VitalDisplay
-                icon={Activity}
-                label="SpO2"
-                value={`${record.vitals.spo2}%`}
-                flagged={record.vitals.flags?.some((f) => f.field === "spo2")}
-              />
-            </div>
-            {record.vitals.notes && (
-              <div className="bg-venus-bg-tertiary rounded-lg p-3">
-                <p className="text-sm text-venus-text-muted">Notes</p>
-                <p className="text-venus-text-primary text-sm mt-1">
-                  {record.vitals.notes}
-                </p>
-              </div>
-            )}
-            <p className="text-xs text-venus-text-muted">
-              Recorded by {record.vitals.recordedBy}
-            </p>
-          </div>
-        ) : (
-          <p className="text-venus-text-muted text-sm italic">
-            Waiting for vitals...
-          </p>
-        )}
-      </div>
+      )}
 
       {/* DOCTOR */}
-      <div
-        className={`card ${isStageActive("doctor") ? "ring-2 ring-purple-500/30" : ""}`}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Stethoscope className="w-5 h-5 text-purple-500" />
-          <h3 className="text-lg font-semibold text-venus-text-primary">
-            Doctor / Diagnosis
-          </h3>
-          <div className="ml-auto flex items-center gap-3">
-            {canViewStage("doctor") && (
+      {canViewStage("doctor") && (
+        <div
+          className={`card ${isStageActive("doctor") ? "ring-2 ring-purple-500/30" : ""}`}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Stethoscope className="w-5 h-5 text-purple-500" />
+            <h3 className="text-lg font-semibold text-venus-text-primary">
+              Doctor / Diagnosis
+            </h3>
+            <div className="ml-auto flex items-center gap-3">
               <button
                 onClick={() => navigate(`/patients/${patientId}`)}
                 className="text-sm text-venus-primary-400 hover:underline flex items-center gap-1"
               >
                 <User className="w-4 h-4" /> View Patient
               </button>
-            )}
-            {isStageComplete("doctor") && (
-              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              {isStageComplete("doctor") && (
+                <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+              )}
+            </div>
+          </div>
+
+          {isStageActive("doctor") && canEditStage("doctor") ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                  Symptoms *
+                </label>
+                <textarea
+                  value={doctorForm.symptoms}
+                  onChange={(e) =>
+                    setDoctorForm({ ...doctorForm, symptoms: e.target.value })
+                  }
+                  rows={2}
+                  className="input-field resize-none"
+                  placeholder="Patient complaints and observed symptoms..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                  Diagnosis *
+                </label>
+                <textarea
+                  value={doctorForm.diagnosis}
+                  onChange={(e) =>
+                    setDoctorForm({ ...doctorForm, diagnosis: e.target.value })
+                  }
+                  rows={3}
+                  className="input-field resize-none"
+                  placeholder="Primary and secondary diagnosis..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                  Services Provided
+                </label>
+                <div className="space-y-2">
+                  {DOCTOR_SERVICES.map((service) => {
+                    const checked = doctorForm.selectedServices.some(
+                      (s) => s.id === service.id,
+                    );
+                    return (
+                      <label
+                        key={service.id}
+                        className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-2.5 cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleDoctorService(service)}
+                            className="w-4 h-4 rounded border-venus-border"
+                          />
+                          <span className="text-sm text-venus-text-primary">
+                            {service.name}
+                          </span>
+                        </span>
+                        <span className="text-sm text-venus-text-secondary">
+                          K{service.price}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                  Prescribe Medications
+                </label>
+                <div className="space-y-3">
+                  {doctorForm.prescriptions.map((rx, idx) => {
+                    const med = medicationCatalog.find(
+                      (m) => m.id === rx.medicationId,
+                    );
+                    const lowStock = med && rx.quantity > med.stock;
+                    return (
+                      <div
+                        key={idx}
+                        className="border border-venus-border rounded-lg p-3 space-y-2"
+                      >
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <select
+                            value={rx.medicationId}
+                            onChange={(e) =>
+                              updatePrescriptionRow(
+                                idx,
+                                "medicationId",
+                                e.target.value,
+                              )
+                            }
+                            className="input-field"
+                          >
+                            <option value="">Select medication...</option>
+                            {medicationCatalog.map((m) => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} (K{m.unitPrice}, {m.stock} in stock)
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={rx.dosage}
+                            onChange={(e) =>
+                              updatePrescriptionRow(
+                                idx,
+                                "dosage",
+                                e.target.value,
+                              )
+                            }
+                            className="input-field"
+                            disabled={!med}
+                          >
+                            <option value="">Dosage...</option>
+                            {med?.dosageOptions?.map((d) => (
+                              <option key={d} value={d}>
+                                {d}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            min="1"
+                            value={rx.quantity}
+                            onChange={(e) =>
+                              updatePrescriptionRow(
+                                idx,
+                                "quantity",
+                                parseInt(e.target.value) || 1,
+                              )
+                            }
+                            className="input-field"
+                            placeholder="Quantity"
+                          />
+                        </div>
+                        {lowStock && (
+                          <p className="text-xs text-red-400 flex items-center gap-1">
+                            <AlertCircle className="w-3.5 h-3.5" /> Only{" "}
+                            {med.stock} in stock — pharmacist will need to
+                            adjust
+                          </p>
+                        )}
+                        <button
+                          onClick={() => removePrescriptionRow(idx)}
+                          className="text-venus-danger text-xs hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button
+                    onClick={addPrescriptionRow}
+                    className="text-sm text-venus-primary-400 hover:underline"
+                  >
+                    + Add Medication
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 bg-venus-bg-tertiary rounded-lg p-3">
+                <input
+                  type="checkbox"
+                  checked={doctorForm.sendToPharmacy}
+                  onChange={(e) =>
+                    setDoctorForm({
+                      ...doctorForm,
+                      sendToPharmacy: e.target.checked,
+                    })
+                  }
+                  className="w-4 h-4 rounded border-venus-border"
+                />
+                <label className="text-sm text-venus-text-secondary">
+                  Send to Pharmacy (patient needs medication dispensed)
+                </label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                  Notes for Next Visit
+                </label>
+                <textarea
+                  value={doctorForm.notesForNextVisit}
+                  onChange={(e) =>
+                    setDoctorForm({
+                      ...doctorForm,
+                      notesForNextVisit: e.target.value,
+                    })
+                  }
+                  rows={2}
+                  className="input-field resize-none"
+                  placeholder="Follow-up instructions, tests to run next time, etc."
+                />
+              </div>
+              <button
+                onClick={handleSaveDoctor}
+                disabled={saving}
+                className="btn-primary flex items-center gap-2"
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save Diagnosis &{" "}
+                {doctorForm.sendToPharmacy
+                  ? "Send to Pharmacy"
+                  : "Send to Billing"}
+              </button>
+            </div>
+          ) : record?.doctor ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm text-venus-text-muted">Symptoms</p>
+                <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">
+                  {record.doctor.symptoms}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-venus-text-muted">Diagnosis</p>
+                <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">
+                  {record.doctor.diagnosis}
+                </p>
+              </div>
+              {record.doctor.services?.length > 0 && (
+                <div>
+                  <p className="text-sm text-venus-text-muted">Services</p>
+                  <div className="space-y-1 mt-1">
+                    {record.doctor.services.map((s, i) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="text-venus-text-primary">
+                          {s.name}
+                        </span>
+                        <span className="text-venus-text-secondary">
+                          K{s.price}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {record.doctor.prescriptions?.length > 0 && (
+                <div>
+                  <p className="text-sm text-venus-text-muted">Prescribed</p>
+                  <div className="space-y-1 mt-1">
+                    {record.doctor.prescriptions.map((rx, i) => (
+                      <div key={i} className="flex justify-between text-sm">
+                        <span className="text-venus-text-primary">
+                          {rx.name} ({rx.dosage}) × {rx.quantity}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {record.doctor.notesForNextVisit && (
+                <div>
+                  <p className="text-sm text-venus-text-muted">
+                    Notes for Next Visit
+                  </p>
+                  <p className="text-venus-text-primary bg-venus-bg-tertiary/50 rounded-lg p-3 mt-1 text-sm border border-venus-border border-dashed">
+                    {record.doctor.notesForNextVisit}
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-venus-text-muted">
+                Recorded by {record.doctor.recordedBy}
+              </p>
+            </div>
+          ) : (
+            <p className="text-venus-text-muted text-sm italic">
+              Waiting for doctor diagnosis...
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* PHARMACY */}
+      {canViewStage("pharmacy") && (
+        <div
+          className={`card ${isStageActive("pharmacy") ? "ring-2 ring-green-500/30" : ""}`}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <Pill className="w-5 h-5 text-green-500" />
+            <h3 className="text-lg font-semibold text-venus-text-primary">
+              Pharmacy
+            </h3>
+            {isStageComplete("pharmacy") && !isStageSkipped("pharmacy") && (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
             )}
           </div>
-        </div>
 
-        {!canViewStage("doctor") ? (
-          <RestrictedNotice />
-        ) : isStageActive("doctor") && canEditStage("doctor") ? (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                Symptoms *
-              </label>
-              <textarea
-                value={doctorForm.symptoms}
-                onChange={(e) =>
-                  setDoctorForm({ ...doctorForm, symptoms: e.target.value })
-                }
-                rows={2}
-                className="input-field resize-none"
-                placeholder="Patient complaints and observed symptoms..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                Diagnosis *
-              </label>
-              <textarea
-                value={doctorForm.diagnosis}
-                onChange={(e) =>
-                  setDoctorForm({ ...doctorForm, diagnosis: e.target.value })
-                }
-                rows={3}
-                className="input-field resize-none"
-                placeholder="Primary and secondary diagnosis..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                Services Provided
-              </label>
-              <div className="space-y-2">
-                {DOCTOR_SERVICES.map((service) => {
-                  const checked = doctorForm.selectedServices.some(
-                    (s) => s.id === service.id,
-                  );
-                  return (
-                    <label
-                      key={service.id}
-                      className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-2.5 cursor-pointer"
-                    >
-                      <span className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleDoctorService(service)}
-                          className="w-4 h-4 rounded border-venus-border"
-                        />
-                        <span className="text-sm text-venus-text-primary">
-                          {service.name}
+          {isStageSkipped("pharmacy") ? (
+            <p className="text-venus-text-muted text-sm italic flex items-center gap-2">
+              <Minus className="w-4 h-4" />
+              Skipped — the doctor marked this visit as not requiring
+              medication.
+            </p>
+          ) : isStageActive("pharmacy") && canEditStage("pharmacy") ? (
+            <div className="space-y-4">
+              {pharmacyForm.medications.map((med, idx) => (
+                <div
+                  key={idx}
+                  className="border border-venus-border rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-venus-text-secondary">
+                      Medication #{idx + 1}{" "}
+                      {med.medicationId && (
+                        <span className="text-xs text-venus-primary-400">
+                          (prescribed)
                         </span>
-                      </span>
-                      <span className="text-sm text-venus-text-secondary">
-                        K{service.price}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
+                      )}
+                    </span>
+                    {pharmacyForm.medications.length > 1 && (
+                      <button
+                        onClick={() => removeMedication(idx)}
+                        className="text-venus-danger text-sm hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
 
-            <div>
-              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                Prescribe Medications
-              </label>
-              <div className="space-y-3">
-                {doctorForm.prescriptions.map((rx, idx) => {
-                  const med = medicationCatalog.find(
-                    (m) => m.id === rx.medicationId,
-                  );
-                  const lowStock = med && rx.quantity > med.stock;
-                  return (
-                    <div
-                      key={idx}
-                      className="border border-venus-border rounded-lg p-3 space-y-2"
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <select
-                          value={rx.medicationId}
-                          onChange={(e) =>
-                            updatePrescriptionRow(
-                              idx,
-                              "medicationId",
-                              e.target.value,
-                            )
-                          }
-                          className="input-field"
-                        >
-                          <option value="">Select medication...</option>
-                          {medicationCatalog.map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.name} (K{m.unitPrice}, {m.stock} in stock)
-                            </option>
-                          ))}
-                        </select>
-                        <select
-                          value={rx.dosage}
-                          onChange={(e) =>
-                            updatePrescriptionRow(idx, "dosage", e.target.value)
-                          }
-                          className="input-field"
-                          disabled={!med}
-                        >
-                          <option value="">Dosage...</option>
-                          {med?.dosageOptions?.map((d) => (
-                            <option key={d} value={d}>
-                              {d}
-                            </option>
-                          ))}
-                        </select>
+                  {med.medicationId ? (
+                    <>
+                      <p className="text-sm text-venus-text-primary">
+                        {med.name} — {med.dosage}
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
                         <input
                           type="number"
                           min="1"
-                          value={rx.quantity}
+                          value={med.quantity}
                           onChange={(e) =>
-                            updatePrescriptionRow(
-                              idx,
-                              "quantity",
-                              parseInt(e.target.value) || 1,
-                            )
+                            updateMedication(idx, "quantity", e.target.value)
                           }
                           className="input-field"
                           placeholder="Quantity"
                         />
-                      </div>
-                      {lowStock && (
-                        <p className="text-xs text-red-400 flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5" /> Only{" "}
-                          {med.stock} in stock — pharmacist will need to adjust
+                        <p className="input-field bg-venus-bg-tertiary flex items-center">
+                          K{med.price || 0}
                         </p>
-                      )}
-                      <button
-                        onClick={() => removePrescriptionRow(idx)}
-                        className="text-venus-danger text-xs hover:underline"
-                      >
-                        Remove
-                      </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <input
+                        value={med.name}
+                        onChange={(e) =>
+                          updateMedication(idx, "name", e.target.value)
+                        }
+                        className="input-field"
+                        placeholder="Medication name"
+                      />
+                      <input
+                        value={med.dosage}
+                        onChange={(e) =>
+                          updateMedication(idx, "dosage", e.target.value)
+                        }
+                        className="input-field"
+                        placeholder="Dosage (e.g., 500mg)"
+                      />
+                      <input
+                        value={med.quantity}
+                        onChange={(e) =>
+                          updateMedication(idx, "quantity", e.target.value)
+                        }
+                        className="input-field"
+                        placeholder="Quantity"
+                      />
+                      <input
+                        type="number"
+                        value={med.price}
+                        onChange={(e) =>
+                          updateMedication(idx, "price", e.target.value)
+                        }
+                        className="input-field"
+                        placeholder="Price (K)"
+                      />
                     </div>
-                  );
-                })}
-                <button
-                  onClick={addPrescriptionRow}
-                  className="text-sm text-venus-primary-400 hover:underline"
-                >
-                  + Add Medication
-                </button>
-              </div>
-            </div>
+                  )}
 
-            <div className="flex items-center gap-2 bg-venus-bg-tertiary rounded-lg p-3">
-              <input
-                type="checkbox"
-                checked={doctorForm.sendToPharmacy}
-                onChange={(e) =>
-                  setDoctorForm({
-                    ...doctorForm,
-                    sendToPharmacy: e.target.checked,
-                  })
-                }
-                className="w-4 h-4 rounded border-venus-border"
-              />
-              <label className="text-sm text-venus-text-secondary">
-                Send to Pharmacy (patient needs medication dispensed)
-              </label>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                Notes for Next Visit
-              </label>
-              <textarea
-                value={doctorForm.notesForNextVisit}
-                onChange={(e) =>
-                  setDoctorForm({
-                    ...doctorForm,
-                    notesForNextVisit: e.target.value,
-                  })
-                }
-                rows={2}
-                className="input-field resize-none"
-                placeholder="Follow-up instructions, tests to run next time, etc."
-              />
-            </div>
-            <button
-              onClick={handleSaveDoctor}
-              disabled={saving}
-              className="btn-primary flex items-center gap-2"
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              Save Diagnosis &{" "}
-              {doctorForm.sendToPharmacy
-                ? "Send to Pharmacy"
-                : "Send to Billing"}
-            </button>
-          </div>
-        ) : record?.doctor ? (
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm text-venus-text-muted">Symptoms</p>
-              <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">
-                {record.doctor.symptoms}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-venus-text-muted">Diagnosis</p>
-              <p className="text-venus-text-primary bg-venus-bg-tertiary rounded-lg p-3 mt-1 text-sm">
-                {record.doctor.diagnosis}
-              </p>
-            </div>
-            {record.doctor.services?.length > 0 && (
+                  <input
+                    value={med.instructions}
+                    onChange={(e) =>
+                      updateMedication(idx, "instructions", e.target.value)
+                    }
+                    className="input-field"
+                    placeholder="Instructions (e.g., Take after meals)"
+                  />
+                </div>
+              ))}
+              <button
+                onClick={addMedication}
+                className="text-sm text-venus-primary-400 hover:underline"
+              >
+                + Add Medication
+              </button>
+
               <div>
-                <p className="text-sm text-venus-text-muted">Services</p>
-                <div className="space-y-1 mt-1">
-                  {record.doctor.services.map((s, i) => (
+                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                  Pharmacy Services
+                </label>
+                <div className="space-y-2">
+                  {PHARMACY_SERVICES.map((service) => {
+                    const checked = pharmacyForm.selectedServices.some(
+                      (s) => s.id === service.id,
+                    );
+                    return (
+                      <label
+                        key={service.id}
+                        className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-2.5 cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => togglePharmacyService(service)}
+                            className="w-4 h-4 rounded border-venus-border"
+                          />
+                          <span className="text-sm text-venus-text-primary">
+                            {service.name}
+                          </span>
+                        </span>
+                        <span className="text-sm text-venus-text-secondary">
+                          K{service.price}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <button
+                onClick={handleSavePharmacy}
+                disabled={saving}
+                className="btn-primary flex items-center gap-2"
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save & Send to Billing
+              </button>
+            </div>
+          ) : record?.pharmacy ? (
+            <div className="space-y-3">
+              {record.pharmacy.medications?.map((med, idx) => (
+                <div
+                  key={idx}
+                  className="border border-venus-border rounded-lg p-3"
+                >
+                  <div className="flex justify-between">
+                    <span className="font-medium text-venus-text-primary">
+                      {med.name}
+                    </span>
+                    <span className="text-venus-text-secondary">
+                      K{med.price}
+                    </span>
+                  </div>
+                  <p className="text-sm text-venus-text-muted">
+                    {med.dosage} — Qty: {med.quantity}
+                  </p>
+                  <p className="text-sm text-venus-text-secondary mt-1">
+                    {med.instructions}
+                  </p>
+                </div>
+              ))}
+              {record.pharmacy.services?.length > 0 && (
+                <div className="space-y-1">
+                  {record.pharmacy.services.map((s, i) => (
                     <div key={i} className="flex justify-between text-sm">
                       <span className="text-venus-text-primary">{s.name}</span>
                       <span className="text-venus-text-secondary">
@@ -1263,409 +1512,174 @@ const MedicalRecordDetails = () => {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-            {record.doctor.prescriptions?.length > 0 && (
-              <div>
-                <p className="text-sm text-venus-text-muted">Prescribed</p>
-                <div className="space-y-1 mt-1">
-                  {record.doctor.prescriptions.map((rx, i) => (
-                    <div key={i} className="flex justify-between text-sm">
-                      <span className="text-venus-text-primary">
-                        {rx.name} ({rx.dosage}) × {rx.quantity}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {record.doctor.notesForNextVisit && (
-              <div>
-                <p className="text-sm text-venus-text-muted">
-                  Notes for Next Visit
-                </p>
-                <p className="text-venus-text-primary bg-venus-bg-tertiary/50 rounded-lg p-3 mt-1 text-sm border border-venus-border border-dashed">
-                  {record.doctor.notesForNextVisit}
-                </p>
-              </div>
-            )}
-            <p className="text-xs text-venus-text-muted">
-              Recorded by {record.doctor.recordedBy}
+              )}
+              <p className="text-xs text-venus-text-muted">
+                Dispensed by {record.pharmacy.dispensedBy}
+              </p>
+            </div>
+          ) : (
+            <p className="text-venus-text-muted text-sm italic">
+              Waiting for pharmacy...
             </p>
-          </div>
-        ) : (
-          <p className="text-venus-text-muted text-sm italic">
-            Waiting for doctor diagnosis...
-          </p>
-        )}
-      </div>
-
-      {/* PHARMACY */}
-      <div
-        className={`card ${isStageActive("pharmacy") ? "ring-2 ring-green-500/30" : ""}`}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <Pill className="w-5 h-5 text-green-500" />
-          <h3 className="text-lg font-semibold text-venus-text-primary">
-            Pharmacy
-          </h3>
-          {isStageComplete("pharmacy") && !isStageSkipped("pharmacy") && (
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
           )}
         </div>
-
-        {!canViewStage("pharmacy") ? (
-          <RestrictedNotice />
-        ) : isStageSkipped("pharmacy") ? (
-          <p className="text-venus-text-muted text-sm italic flex items-center gap-2">
-            <Minus className="w-4 h-4" />
-            Skipped — the doctor marked this visit as not requiring medication.
-          </p>
-        ) : isStageActive("pharmacy") && canEditStage("pharmacy") ? (
-          <div className="space-y-4">
-            {pharmacyForm.medications.map((med, idx) => (
-              <div
-                key={idx}
-                className="border border-venus-border rounded-lg p-4 space-y-3"
-              >
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-venus-text-secondary">
-                    Medication #{idx + 1}{" "}
-                    {med.medicationId && (
-                      <span className="text-xs text-venus-primary-400">
-                        (prescribed)
-                      </span>
-                    )}
-                  </span>
-                  {pharmacyForm.medications.length > 1 && (
-                    <button
-                      onClick={() => removeMedication(idx)}
-                      className="text-venus-danger text-sm hover:underline"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-
-                {med.medicationId ? (
-                  <>
-                    <p className="text-sm text-venus-text-primary">
-                      {med.name} — {med.dosage}
-                    </p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <input
-                        type="number"
-                        min="1"
-                        value={med.quantity}
-                        onChange={(e) =>
-                          updateMedication(idx, "quantity", e.target.value)
-                        }
-                        className="input-field"
-                        placeholder="Quantity"
-                      />
-                      <p className="input-field bg-venus-bg-tertiary flex items-center">
-                        K{med.price || 0}
-                      </p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <input
-                      value={med.name}
-                      onChange={(e) =>
-                        updateMedication(idx, "name", e.target.value)
-                      }
-                      className="input-field"
-                      placeholder="Medication name"
-                    />
-                    <input
-                      value={med.dosage}
-                      onChange={(e) =>
-                        updateMedication(idx, "dosage", e.target.value)
-                      }
-                      className="input-field"
-                      placeholder="Dosage (e.g., 500mg)"
-                    />
-                    <input
-                      value={med.quantity}
-                      onChange={(e) =>
-                        updateMedication(idx, "quantity", e.target.value)
-                      }
-                      className="input-field"
-                      placeholder="Quantity"
-                    />
-                    <input
-                      type="number"
-                      value={med.price}
-                      onChange={(e) =>
-                        updateMedication(idx, "price", e.target.value)
-                      }
-                      className="input-field"
-                      placeholder="Price (K)"
-                    />
-                  </div>
-                )}
-
-                <input
-                  value={med.instructions}
-                  onChange={(e) =>
-                    updateMedication(idx, "instructions", e.target.value)
-                  }
-                  className="input-field"
-                  placeholder="Instructions (e.g., Take after meals)"
-                />
-              </div>
-            ))}
-            <button
-              onClick={addMedication}
-              className="text-sm text-venus-primary-400 hover:underline"
-            >
-              + Add Medication
-            </button>
-
-            <div>
-              <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                Pharmacy Services
-              </label>
-              <div className="space-y-2">
-                {PHARMACY_SERVICES.map((service) => {
-                  const checked = pharmacyForm.selectedServices.some(
-                    (s) => s.id === service.id,
-                  );
-                  return (
-                    <label
-                      key={service.id}
-                      className="flex items-center justify-between bg-venus-bg-tertiary rounded-lg p-2.5 cursor-pointer"
-                    >
-                      <span className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => togglePharmacyService(service)}
-                          className="w-4 h-4 rounded border-venus-border"
-                        />
-                        <span className="text-sm text-venus-text-primary">
-                          {service.name}
-                        </span>
-                      </span>
-                      <span className="text-sm text-venus-text-secondary">
-                        K{service.price}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-
-            <button
-              onClick={handleSavePharmacy}
-              disabled={saving}
-              className="btn-primary flex items-center gap-2"
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Save className="w-4 h-4" />
-              )}
-              Save & Send to Billing
-            </button>
-          </div>
-        ) : record?.pharmacy ? (
-          <div className="space-y-3">
-            {record.pharmacy.medications?.map((med, idx) => (
-              <div
-                key={idx}
-                className="border border-venus-border rounded-lg p-3"
-              >
-                <div className="flex justify-between">
-                  <span className="font-medium text-venus-text-primary">
-                    {med.name}
-                  </span>
-                  <span className="text-venus-text-secondary">
-                    K{med.price}
-                  </span>
-                </div>
-                <p className="text-sm text-venus-text-muted">
-                  {med.dosage} — Qty: {med.quantity}
-                </p>
-                <p className="text-sm text-venus-text-secondary mt-1">
-                  {med.instructions}
-                </p>
-              </div>
-            ))}
-            {record.pharmacy.services?.length > 0 && (
-              <div className="space-y-1">
-                {record.pharmacy.services.map((s, i) => (
-                  <div key={i} className="flex justify-between text-sm">
-                    <span className="text-venus-text-primary">{s.name}</span>
-                    <span className="text-venus-text-secondary">
-                      K{s.price}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="text-xs text-venus-text-muted">
-              Dispensed by {record.pharmacy.dispensedBy}
-            </p>
-          </div>
-        ) : (
-          <p className="text-venus-text-muted text-sm italic">
-            Waiting for pharmacy...
-          </p>
-        )}
-      </div>
+      )}
 
       {/* BILLING */}
-      <div
-        className={`card ${isStageActive("billing") ? "ring-2 ring-orange-500/30" : ""}`}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <CreditCard className="w-5 h-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-venus-text-primary">
-            Billing & Payment
-          </h3>
-          {isStageComplete("billing") && (
-            <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
-          )}
-        </div>
-
-        {!canViewStage("billing") ? (
-          <RestrictedNotice />
-        ) : isStageActive("billing") && canEditStage("billing") ? (
-          <div className="space-y-4">
-            <div className="bg-venus-bg-tertiary rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-venus-text-muted">Services Total</span>
-                <span className="text-venus-text-primary">
-                  K{billingForm.servicesTotal}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-venus-text-muted">Medications Total</span>
-                <span className="text-venus-text-primary">
-                  K{billingForm.medicationsTotal}
-                </span>
-              </div>
-              <div className="border-t border-venus-border pt-2 flex justify-between font-bold">
-                <span className="text-venus-text-primary">Total Amount</span>
-                <span className="text-venus-primary-400">
-                  K{billingForm.totalAmount}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => calculateTotals()}
-              className="text-sm text-venus-primary-400 hover:underline"
-            >
-              Recalculate Totals
-            </button>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                  Payment Method
-                </label>
-                <select
-                  value={billingForm.paymentMethod}
-                  onChange={(e) =>
-                    setBillingForm({
-                      ...billingForm,
-                      paymentMethod: e.target.value,
-                    })
-                  }
-                  className="input-field"
-                >
-                  <option value="">Select...</option>
-                  <option value="cash">Cash</option>
-                  <option value="card">Card</option>
-                  <option value="mobile_money">Mobile Money</option>
-                  <option value="insurance">Insurance</option>
-                </select>
-              </div>
-              <div className="flex items-center gap-2 pt-6">
-                <input
-                  type="checkbox"
-                  checked={billingForm.paid}
-                  onChange={(e) =>
-                    setBillingForm({ ...billingForm, paid: e.target.checked })
-                  }
-                  className="w-4 h-4 rounded border-venus-border"
-                />
-                <label className="text-sm text-venus-text-secondary">
-                  Payment Received
-                </label>
-              </div>
-            </div>
-            <button
-              onClick={handleCompleteBilling}
-              disabled={saving || !billingForm.paid}
-              className="btn-primary flex items-center gap-2"
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4" />
-              )}
-              Complete Billing & Close Visit
-            </button>
-            {!billingForm.paid && (
-              <p className="text-xs text-venus-warning">
-                Please confirm payment received before closing.
-              </p>
+      {canViewStage("billing") && (
+        <div
+          className={`card ${isStageActive("billing") ? "ring-2 ring-orange-500/30" : ""}`}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <CreditCard className="w-5 h-5 text-orange-500" />
+            <h3 className="text-lg font-semibold text-venus-text-primary">
+              Billing & Payment
+            </h3>
+            {isStageComplete("billing") && (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 ml-auto" />
             )}
           </div>
-        ) : record?.billing ? (
-          <div className="space-y-3">
-            <div className="bg-venus-bg-tertiary rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-venus-text-muted">Services</span>
-                <span className="text-venus-text-primary">
-                  K{record.billing.servicesTotal}
-                </span>
+
+          {isStageActive("billing") && canEditStage("billing") ? (
+            <div className="space-y-4">
+              <div className="bg-venus-bg-tertiary rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-venus-text-muted">Services Total</span>
+                  <span className="text-venus-text-primary">
+                    K{billingForm.servicesTotal}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-venus-text-muted">
+                    Medications Total
+                  </span>
+                  <span className="text-venus-text-primary">
+                    K{billingForm.medicationsTotal}
+                  </span>
+                </div>
+                <div className="border-t border-venus-border pt-2 flex justify-between font-bold">
+                  <span className="text-venus-text-primary">Total Amount</span>
+                  <span className="text-venus-primary-400">
+                    K{billingForm.totalAmount}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-venus-text-muted">Medications</span>
-                <span className="text-venus-text-primary">
-                  K{record.billing.medicationsTotal}
-                </span>
+              <button
+                onClick={() => calculateTotals()}
+                className="text-sm text-venus-primary-400 hover:underline"
+              >
+                Recalculate Totals
+              </button>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
+                    Payment Method
+                  </label>
+                  <select
+                    value={billingForm.paymentMethod}
+                    onChange={(e) =>
+                      setBillingForm({
+                        ...billingForm,
+                        paymentMethod: e.target.value,
+                      })
+                    }
+                    className="input-field"
+                  >
+                    <option value="">Select...</option>
+                    <option value="cash">Cash</option>
+                    <option value="card">Card</option>
+                    <option value="mobile_money">Mobile Money</option>
+                    <option value="insurance">Insurance</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    checked={billingForm.paid}
+                    onChange={(e) =>
+                      setBillingForm({
+                        ...billingForm,
+                        paid: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 rounded border-venus-border"
+                  />
+                  <label className="text-sm text-venus-text-secondary">
+                    Payment Received
+                  </label>
+                </div>
               </div>
-              <div className="border-t border-venus-border pt-2 flex justify-between font-bold">
-                <span className="text-venus-text-primary">Total Paid</span>
-                <span className="text-venus-primary-400">
-                  K{record.billing.totalAmount}
-                </span>
-              </div>
+              <button
+                onClick={handleCompleteBilling}
+                disabled={saving || !billingForm.paid}
+                className="btn-primary flex items-center gap-2"
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4" />
+                )}
+                Complete Billing & Close Visit
+              </button>
+              {!billingForm.paid && (
+                <p className="text-xs text-venus-warning">
+                  Please confirm payment received before closing.
+                </p>
+              )}
             </div>
-            <div className="flex gap-4 text-sm">
-              <span className="text-venus-text-muted">
-                Method:{" "}
-                <span className="text-venus-text-primary capitalize">
-                  {record.billing.paymentMethod}
+          ) : record?.billing ? (
+            <div className="space-y-3">
+              <div className="bg-venus-bg-tertiary rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-venus-text-muted">Services</span>
+                  <span className="text-venus-text-primary">
+                    K{record.billing.servicesTotal}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-venus-text-muted">Medications</span>
+                  <span className="text-venus-text-primary">
+                    K{record.billing.medicationsTotal}
+                  </span>
+                </div>
+                <div className="border-t border-venus-border pt-2 flex justify-between font-bold">
+                  <span className="text-venus-text-primary">Total Paid</span>
+                  <span className="text-venus-primary-400">
+                    K{record.billing.totalAmount}
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-4 text-sm">
+                <span className="text-venus-text-muted">
+                  Method:{" "}
+                  <span className="text-venus-text-primary capitalize">
+                    {record.billing.paymentMethod}
+                  </span>
                 </span>
-              </span>
-              <span className="text-venus-text-muted">
-                Status:{" "}
-                <span
-                  className={
-                    record.billing.paid
-                      ? "text-venus-success"
-                      : "text-venus-warning"
-                  }
-                >
-                  {record.billing.paid ? "Paid" : "Pending"}
+                <span className="text-venus-text-muted">
+                  Status:{" "}
+                  <span
+                    className={
+                      record.billing.paid
+                        ? "text-venus-success"
+                        : "text-venus-warning"
+                    }
+                  >
+                    {record.billing.paid ? "Paid" : "Pending"}
+                  </span>
                 </span>
-              </span>
+              </div>
+              <p className="text-xs text-venus-text-muted">
+                Billed by {record.billing.billedBy}
+              </p>
             </div>
-            <p className="text-xs text-venus-text-muted">
-              Billed by {record.billing.billedBy}
+          ) : (
+            <p className="text-venus-text-muted text-sm italic">
+              Waiting for billing...
             </p>
-          </div>
-        ) : (
-          <p className="text-venus-text-muted text-sm italic">
-            Waiting for billing...
-          </p>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -1688,13 +1702,6 @@ const VitalDisplay = ({ icon: Icon, label, value, flagged }) => (
       </p>
     </div>
   </div>
-);
-
-const RestrictedNotice = () => (
-  <p className="text-venus-text-muted text-sm italic flex items-center gap-2">
-    <Lock className="w-4 h-4" />
-    Not visible to your role
-  </p>
 );
 
 export default MedicalRecordDetails;

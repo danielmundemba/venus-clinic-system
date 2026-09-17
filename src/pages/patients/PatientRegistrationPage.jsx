@@ -2,10 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { DEFAULT_GENERATED_PASSWORD, patientSchema } from "../../utils/validators";
+import { patientSchema } from "../../utils/validators";
+import { generateSecurePassword } from "../../utils/passwordGenerator";
+import { sendNewAccountEmail } from "../../utils/emailService";
 import { registerPatient } from "../../firebase/auth";
 import { useAuditLog } from "../../hooks/useAuditLog";
 import { calculateAge } from "../../utils/formatters";
+import FloatingInput from "../../components/common/FloatingInput";
 import {
   ArrowLeft,
   UserPlus,
@@ -59,7 +62,25 @@ const PatientRegistrationPage = () => {
         allergies: data.allergies || null,
       };
 
-      const result = await registerPatient(data.email, DEFAULT_GENERATED_PASSWORD, patientData);
+      // Nobody types this — a fresh, policy-compliant password is
+      // generated per patient and emailed to them. It's never displayed
+      // in the UI and never logged.
+      const generatedPassword = generateSecurePassword();
+
+      const result = await registerPatient(
+        data.email,
+        generatedPassword,
+        patientData,
+      );
+
+      // Best-effort: the account already exists at this point, so an
+      // email failure shouldn't be treated as the registration failing.
+      const emailResult = await sendNewAccountEmail({
+        toEmail: data.email,
+        toName: `${data.firstName} ${data.lastName}`,
+        tempPassword: generatedPassword,
+        role: "patient",
+      });
 
       await logAction("create", "patient", result.uid, {
         name: `${data.firstName} ${data.lastName}`,
@@ -70,9 +91,9 @@ const PatientRegistrationPage = () => {
 
       navigate("/patients", {
         state: {
-          successMessage:
-            `${data.firstName} ${data.lastName} was registered successfully as ${result.patientNumber}. ` +
-            `They can now log in with their email and the default password (${DEFAULT_GENERATED_PASSWORD}).`,
+          successMessage: emailResult.success
+            ? `${data.firstName} ${data.lastName} was registered successfully as ${result.patientNumber}. Their login details were emailed to ${data.email}.`
+            : `${data.firstName} ${data.lastName} was registered successfully as ${result.patientNumber}, but the welcome email couldn't be sent. Use "Forgot password" to get them a login link.`,
         },
       });
     } catch (error) {
@@ -83,8 +104,6 @@ const PatientRegistrationPage = () => {
           "This email is already registered. Please use a different email.";
       } else if (error.code === "auth/invalid-email") {
         errorMessage = "Invalid email address.";
-      } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password is too weak.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -109,106 +128,62 @@ const PatientRegistrationPage = () => {
           Register New Patient
         </h1>
         <p className="text-venus-text-muted mt-1">
-          Creates a patient account with the default password {DEFAULT_GENERATED_PASSWORD}
+          A secure password is generated automatically and emailed to the
+          patient.
         </p>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="card space-y-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-              First Name <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-              <input
-                {...register("firstName")}
-                className="input-field pl-10"
-                placeholder="John"
-              />
-            </div>
-            {errors.firstName && (
-              <p className="mt-1 text-xs text-red-400">
-                {errors.firstName.message}
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-              Last Name <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-              <input
-                {...register("lastName")}
-                className="input-field pl-10"
-                placeholder="Doe"
-              />
-            </div>
-            {errors.lastName && (
-              <p className="mt-1 text-xs text-red-400">
-                {errors.lastName.message}
-              </p>
-            )}
-          </div>
+          <FloatingInput
+            label="First Name"
+            name="firstName"
+            icon={User}
+            register={register}
+            error={errors.firstName}
+          />
+          <FloatingInput
+            label="Last Name"
+            name="lastName"
+            icon={User}
+            register={register}
+            error={errors.lastName}
+          />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-venus-text-primary mb-1.5">
-            Email Address <span className="text-red-400">*</span>
-          </label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-            <input
-              {...register("email")}
-              type="email"
-              className="input-field pl-10"
-              placeholder="patient@email.com"
-            />
-          </div>
-          {errors.email && (
-            <p className="mt-1 text-xs text-red-400">{errors.email.message}</p>
-          )}
+          <FloatingInput
+            label="Email Address"
+            name="email"
+            type="email"
+            icon={Mail}
+            register={register}
+            error={errors.email}
+          />
           <p className="mt-1 text-xs text-venus-text-muted">
-            This will be used for login. Default password will be set to "{DEFAULT_GENERATED_PASSWORD}".
+            This will be used for login. A generated password will be sent here
+            automatically.
           </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-            NRC Number
-          </label>
-          <div className="relative">
-            <Contact className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-            <input
-              {...register("nrcNumber")}
-              className="input-field pl-10"
-              placeholder="123456/78/9"
-            />
-          </div>
-          {errors.nrcNumber && (
-            <p className="mt-1 text-xs text-red-400">
-              {errors.nrcNumber.message}
-            </p>
-          )}
-        </div>
+        <FloatingInput
+          label="NRC Number"
+          name="nrcNumber"
+          icon={Contact}
+          register={register}
+          error={errors.nrcNumber}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-              Date of Birth <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-              <input
-                {...register("DOB")}
-                type="date"
-                className="input-field pl-10"
-              />
-            </div>
-            {errors.DOB && (
-              <p className="mt-1 text-xs text-red-400">{errors.DOB.message}</p>
-            )}
+            <FloatingInput
+              label="Date of Birth"
+              name="DOB"
+              type="date"
+              icon={Calendar}
+              register={register}
+              error={errors.DOB}
+            />
             {age !== null && (
               <p className="mt-1 text-xs text-venus-text-muted">
                 {age} years old
@@ -232,42 +207,22 @@ const PatientRegistrationPage = () => {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-            Phone Number <span className="text-red-400">*</span>
-          </label>
-          <div className="relative">
-            <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-venus-text-muted" />
-            <input
-              {...register("phone")}
-              className="input-field pl-10"
-              placeholder="+260 97 1234567"
-            />
-          </div>
-          {errors.phone && (
-            <p className="mt-1 text-xs text-red-400">{errors.phone.message}</p>
-          )}
-        </div>
+        <FloatingInput
+          label="Phone Number"
+          name="phone"
+          type="tel"
+          icon={Phone}
+          register={register}
+          error={errors.phone}
+        />
 
-        <div>
-          <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-            Address <span className="text-red-400">*</span>
-          </label>
-          <div className="relative">
-            <MapPin className="absolute left-3 top-3 w-4 h-4 text-venus-text-muted" />
-            <textarea
-              {...register("address")}
-              rows={2}
-              className="input-field pl-10 resize-none"
-              placeholder="123 Main Street, Kitwe"
-            />
-          </div>
-          {errors.address && (
-            <p className="mt-1 text-xs text-red-400">
-              {errors.address.message}
-            </p>
-          )}
-        </div>
+        <FloatingInput
+          label="Address"
+          name="address"
+          icon={MapPin}
+          register={register}
+          error={errors.address}
+        />
 
         <div>
           <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
@@ -289,26 +244,17 @@ const PatientRegistrationPage = () => {
             Emergency Contact (Optional)
           </h5>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-venus-text-muted mb-1">
-                Name
-              </label>
-              <input
-                {...register("emergencyContactName")}
-                className="input-field"
-                placeholder="Contact name"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-venus-text-muted mb-1">
-                Phone
-              </label>
-              <input
-                {...register("emergencyContactPhone")}
-                className="input-field"
-                placeholder="+260 97 1234567"
-              />
-            </div>
+            <FloatingInput
+              label="Name"
+              name="emergencyContactName"
+              register={register}
+            />
+            <FloatingInput
+              label="Phone"
+              name="emergencyContactPhone"
+              type="tel"
+              register={register}
+            />
           </div>
         </div>
 

@@ -9,7 +9,8 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
-import { db } from "../../firebase/config";
+import { sendPasswordResetEmail } from "firebase/auth";
+import { db, auth } from "../../firebase/config";
 import { useAuth } from "../../context/AuthContext";
 import { useAuditLog } from "../../hooks/useAuditLog";
 import {
@@ -33,6 +34,10 @@ import {
   CheckCircle2,
   XCircle,
   PartyPopper,
+  Mail,
+  Trash2,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
 
 const UserManagement = () => {
@@ -49,6 +54,16 @@ const UserManagement = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+  // Per-row id currently running an async action (resend email), so only
+  // that row's button shows a spinner and the rest of the table stays
+  // interactive.
+  const [actionLoadingId, setActionLoadingId] = useState(null);
+  // The user pending deletion — having a confirmation dialog is what makes
+  // this a two-step, user-cancellable action rather than an accidental
+  // one-click delete.
+  const [deletingUser, setDeletingUser] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const usersPerPage = 10;
 
   // Staff job roles — these are the only roles that can be assigned when
@@ -107,11 +122,15 @@ const UserManagement = () => {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const usersData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-        }));
+        const usersData = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt?.toDate() || new Date(),
+          }))
+          // Soft-deleted accounts are hidden from the working list entirely
+          // rather than shown as an "Inactive"-style status.
+          .filter((u) => !u.deletedAt);
         setUsers(usersData);
         setLoading(false);
       },
@@ -134,13 +153,10 @@ const UserManagement = () => {
     }
   }, [location.state]);
 
-  // Auto-clear success message
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(""), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
+  // Toasts stay up until the user dismisses them with the X — no
+  // auto-clear timers. This matters most for the "email couldn't be sent"
+  // / "delete failed" cases, which shouldn't vanish before someone reads
+  // them.
 
   // Filter and search logic
   const filteredUsers = users.filter((user) => {
@@ -191,7 +207,7 @@ const UserManagement = () => {
       setEditingUser(null);
     } catch (err) {
       console.error("Error updating role:", err);
-      alert("Failed to update role");
+      setErrorMessage("Failed to update role. Please try again.");
     } finally {
       setUpdateLoading(false);
     }
@@ -212,7 +228,62 @@ const UserManagement = () => {
       });
     } catch (err) {
       console.error("Error updating status:", err);
-      alert("Failed to update status");
+      setErrorMessage("Failed to update status. Please try again.");
+    }
+  };
+
+  // Resend welcome email — since the client SDK can't set another user's
+  // password, this sends Firebase's native password-reset link instead of
+  // re-sending a password. The user clicks the link and picks their own
+  // new password; their current password keeps working until they do.
+  const handleResendWelcomeEmail = async (user) => {
+    setActionLoadingId(user.id);
+    setErrorMessage("");
+    try {
+      await sendPasswordResetEmail(auth, user.email);
+      await logAction("update", "user", user.id, {
+        field: "welcomeEmailResent",
+      });
+      setSuccessMessage(`A password reset link was sent to ${user.email}.`);
+    } catch (err) {
+      console.error("Error resending welcome email:", err);
+      setErrorMessage(
+        `Failed to send an email to ${user.email}. ${err.message || "Please try again."}`,
+      );
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  // Soft delete — see the note above the component: this deactivates and
+  // hides the account from this list. It does not remove the underlying
+  // Firebase Auth login, which requires the Admin SDK (Cloud Functions,
+  // Blaze plan) to do from a backend.
+  const handleDeleteAccount = async () => {
+    if (!deletingUser) return;
+    setDeleteLoading(true);
+    setErrorMessage("");
+    try {
+      await updateDoc(doc(db, "users", deletingUser.id), {
+        isActive: false,
+        deletedAt: serverTimestamp(),
+        deletedBy: currentUser?.uid || null,
+      });
+
+      await logAction("delete", "user", deletingUser.id, {
+        name: `${deletingUser.firstName} ${deletingUser.lastName}`,
+        email: deletingUser.email,
+      });
+
+      setSuccessMessage(
+        `${deletingUser.firstName} ${deletingUser.lastName}'s account was removed.`,
+      );
+      setDeletingUser(null);
+    } catch (err) {
+      console.error("Error deleting account:", err);
+      setErrorMessage("Failed to delete this account. Please try again.");
+    } finally {
+      setDeleteLoading(false);
     }
   };
 
@@ -294,9 +365,7 @@ const UserManagement = () => {
 
   return (
     <div className="space-y-6">
-      {/* Success Toast — fixed to the viewport so it's always visible,
-          regardless of scroll position or navigation back from the
-          Create Staff page. */}
+      {/* Success Toast — fixed to the viewport, stays until dismissed */}
       {successMessage && (
         <div className="fixed top-4 right-4 left-4 sm:left-auto z-[100] sm:max-w-md flex items-start gap-3 p-4 bg-emerald-950 border border-emerald-500/40 rounded-xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300">
           <div className="p-2 bg-emerald-500/20 rounded-full shrink-0">
@@ -311,6 +380,25 @@ const UserManagement = () => {
             className="p-1 hover:bg-emerald-500/20 rounded-lg transition-colors shrink-0"
           >
             <X className="w-4 h-4 text-emerald-300" />
+          </button>
+        </div>
+      )}
+
+      {/* Error Toast — same pattern, stays until dismissed */}
+      {errorMessage && (
+        <div className="fixed top-4 right-4 left-4 sm:left-auto z-[100] sm:max-w-md flex items-start gap-3 p-4 bg-red-950 border border-red-500/40 rounded-xl shadow-2xl animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="p-2 bg-red-500/20 rounded-full shrink-0">
+            <AlertTriangle className="w-5 h-5 text-red-400" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-red-300">Error</p>
+            <p className="text-sm text-red-400/90">{errorMessage}</p>
+          </div>
+          <button
+            onClick={() => setErrorMessage("")}
+            className="p-1 hover:bg-red-500/20 rounded-lg transition-colors shrink-0"
+          >
+            <X className="w-4 h-4 text-red-300" />
           </button>
         </div>
       )}
@@ -521,6 +609,7 @@ const UserManagement = () => {
                     const RoleIcon = roleConfig.icon;
                     const isEditing = editingUser === user.id;
                     const isCurrentUser = user.id === currentUser?.uid;
+                    const isRowBusy = actionLoadingId === user.id;
 
                     return (
                       <tr
@@ -613,16 +702,41 @@ const UserManagement = () => {
                             {formatDate(user.createdAt)}
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-right">
-                          {!isEditing && !isCurrentUser && (
-                            <button
-                              onClick={() => setEditingUser(user.id)}
-                              className="p-2 hover:bg-venus-bg-tertiary rounded-lg transition-colors text-venus-text-muted hover:text-venus-text-primary"
-                              title="Edit role"
-                            >
-                              <UserCog className="w-4 h-4" />
-                            </button>
-                          )}
+                        <td className="py-3 px-4">
+                          <div className="flex items-center justify-end gap-1">
+                            {!isEditing && !isCurrentUser && (
+                              <button
+                                onClick={() => setEditingUser(user.id)}
+                                className="p-2 hover:bg-venus-bg-tertiary rounded-lg transition-colors text-venus-text-muted hover:text-venus-text-primary"
+                                title="Edit role"
+                              >
+                                <UserCog className="w-4 h-4" />
+                              </button>
+                            )}
+                            {!isCurrentUser && (
+                              <button
+                                onClick={() => handleResendWelcomeEmail(user)}
+                                disabled={isRowBusy}
+                                className="p-2 hover:bg-venus-bg-tertiary rounded-lg transition-colors text-venus-text-muted hover:text-venus-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Resend welcome email"
+                              >
+                                {isRowBusy ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Mail className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
+                            {!isCurrentUser && (
+                              <button
+                                onClick={() => setDeletingUser(user)}
+                                className="p-2 hover:bg-red-500/10 rounded-lg transition-colors text-venus-text-muted hover:text-red-400"
+                                title="Delete account"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -699,6 +813,60 @@ const UserManagement = () => {
           </>
         )}
       </div>
+
+      {/* Delete confirmation modal — only closes via explicit Cancel/Delete,
+          never on its own. */}
+      {deletingUser && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !deleteLoading && setDeletingUser(null)}
+        >
+          <div
+            className="card w-full max-w-md space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-red-500/15 rounded-full shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-venus-text-primary">
+                  Delete this account?
+                </h3>
+                <p className="text-sm text-venus-text-muted mt-1">
+                  {deletingUser.firstName} {deletingUser.lastName} (
+                  {deletingUser.email}) will lose access immediately and be
+                  removed from this list. This can't be undone from here.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeletingUser(null)}
+                disabled={deleteLoading}
+                className="px-4 py-2 border border-venus-border text-venus-text-primary rounded-lg text-sm font-medium hover:bg-venus-bg-elevated transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {deleteLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" /> Delete Account
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

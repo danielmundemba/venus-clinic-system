@@ -3,64 +3,82 @@
 @tailwind utilities;
 
 :root {
-  --venus-bg-primary: #F4F8FC;
-  --venus-bg-secondary: #EAF2F9;
-  --venus-bg-tertiary: #DFE9F3;
-  --venus-bg-elevated: #D3DFF0;
-  --venus-primary-400: #38BDF8;
-  --venus-primary-500: #0EA5E9;
-  --venus-primary-600: #0284C7;
-  --venus-text-primary: #0B1120;
+  --venus-bg-primary: #f4f8fc;
+  --venus-bg-secondary: #eaf2f9;
+  --venus-bg-tertiary: #dfe9f3;
+  --venus-bg-elevated: #d3dff0;
+  --venus-primary-400: #38bdf8;
+  --venus-primary-500: #0ea5e9;
+  --venus-primary-600: #0284c7;
+  --venus-text-primary: #0b1120;
   --venus-text-secondary: #243447;
   --venus-text-muted: #475569;
-  --venus-text-disabled: #64748B;
+  --venus-text-disabled: #64748b;
   --venus-success: #059669;
-  --venus-warning: #D97706;
-  --venus-danger: #DC2626;
-  --venus-info: #7C3AED;
-  --venus-border-default: #CDD5E0;
-  --venus-border-hover: #A6B5C5;
-  --venus-border-focus: #0EA5E9;
+  --venus-warning: #d97706;
+  --venus-danger: #dc2626;
+  --venus-info: #7c3aed;
+  --venus-border-default: #cdd5e0;
+  --venus-border-hover: #a6b5c5;
+  --venus-border-focus: #0ea5e9;
 }
 
 .dark {
-  --venus-bg-primary: #0B1120;
-  --venus-bg-secondary: #151E32;
-  --venus-bg-tertiary: #1E293B;
+  --venus-bg-primary: #0b1120;
+  --venus-bg-secondary: #151e32;
+  --venus-bg-tertiary: #1e293b;
   --venus-bg-elevated: #243447;
-  --venus-primary-400: #38BDF8;
-  --venus-primary-500: #0EA5E9;
-  --venus-primary-600: #0284C7;
-  --venus-text-primary: #F8FAFC;
-  --venus-text-secondary: #CBD5E1;
-  --venus-text-muted: #64748B;
+  --venus-primary-400: #38bdf8;
+  --venus-primary-500: #0ea5e9;
+  --venus-primary-600: #0284c7;
+  --venus-text-primary: #f8fafc;
+  --venus-text-secondary: #cbd5e1;
+  --venus-text-muted: #64748b;
   --venus-text-disabled: #475569;
-  --venus-success: #10B981;
-  --venus-warning: #F59E0B;
-  --venus-danger: #EF4444;
-  --venus-info: #8B5CF6;
+  --venus-success: #10b981;
+  --venus-warning: #f59e0b;
+  --venus-danger: #ef4444;
+  --venus-info: #8b5cf6;
   --venus-border-default: #334155;
   --venus-border-hover: #475569;
-  --venus-border-focus: #0EA5E9;
+  --venus-border-focus: #0ea5e9;
 }
 
 @layer base {
-  html { @apply antialiased; }
+  html {
+    @apply antialiased;
+  }
 
   body {
     background-color: var(--venus-bg-primary);
     color: var(--venus-text-primary);
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family:
+      "Inter",
+      system-ui,
+      -apple-system,
+      sans-serif;
   }
 
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background-color: var(--venus-bg-primary); }
-  ::-webkit-scrollbar-thumb { background-color: var(--venus-bg-tertiary); border-radius: 9999px; }
-  ::-webkit-scrollbar-thumb:hover { background-color: var(--venus-border-hover); }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background-color: var(--venus-bg-primary);
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--venus-bg-tertiary);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--venus-border-hover);
+  }
 
   *:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 2px var(--venus-primary-500), 0 0 0 4px var(--venus-bg-primary);
+    box-shadow:
+      0 0 0 2px var(--venus-primary-500),
+      0 0 0 4px var(--venus-bg-primary);
   }
 }
 
@@ -81,7 +99,9 @@
     color: var(--venus-text-primary);
     transition: all 0.2s;
   }
-  .input-field::placeholder { color: var(--venus-text-muted); }
+  .input-field::placeholder {
+    color: var(--venus-text-muted);
+  }
   .input-field:focus {
     outline: none;
     border-color: var(--venus-primary-500);
@@ -103,7 +123,10 @@
     background-color: var(--venus-primary-600);
     box-shadow: 0 0 30px rgba(14, 165, 233, 0.2);
   }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 
   .btn-secondary {
     padding: 0.75rem 1.5rem;
@@ -115,7 +138,9 @@
     cursor: pointer;
     transition: all 0.2s;
   }
-  .btn-secondary:hover { background-color: var(--venus-bg-elevated); }
+  .btn-secondary:hover {
+    background-color: var(--venus-bg-elevated);
+  }
 
   .btn-danger {
     padding: 0.75rem 1.5rem;
@@ -127,13 +152,19 @@
     cursor: pointer;
     transition: all 0.2s;
   }
-  .btn-danger:hover { background-color: rgba(220, 38, 38, 0.2); }
-
-  .logo-bg { background-color: #0EA5E9 !important; color: white; }
-  .logo-icon { color: white !important; 
+  .btn-danger:hover {
+    background-color: rgba(220, 38, 38, 0.2);
   }
 
-    .skeleton-shimmer {
+  .logo-bg {
+    background-color: #0ea5e9 !important;
+    color: white;
+  }
+  .logo-icon {
+    color: white !important;
+  }
+
+  .skeleton-shimmer {
     background: linear-gradient(
       90deg,
       var(--venus-bg-tertiary) 25%,
@@ -145,7 +176,50 @@
   }
 
   @keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
+}
+.floating-field .input-field {
+  /* Solid background REQUIRED so the shrunk label masks the border
+     behind it. Change to match your panel/card color if needed. */
+  background-color: var(--venus-bg-secondary, #1e293b);
+}
+
+.floating-field .floating-label {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: var(--venus-text-muted, #94a3b8);
+  pointer-events: none;
+  transition: all 0.15s ease;
+  padding: 0 0.25rem;
+  white-space: nowrap;
+}
+
+/* When a left icon is present, keep the label clear of it */
+.floating-field--icon .floating-label {
+  left: 2.5rem;
+}
+.floating-field--icon .input-field:focus ~ .floating-label,
+.floating-field--icon .input-field:not(:placeholder-shown) ~ .floating-label,
+.floating-field--icon .input-field:-webkit-autofill ~ .floating-label {
+  left: 0.75rem; /* back to the edge once it's shrunk to the top */
+}
+
+.floating-field .input-field:focus ~ .floating-label,
+.floating-field .input-field:not(:placeholder-shown) ~ .floating-label,
+.floating-field .input-field:-webkit-autofill ~ .floating-label {
+  top: 0;
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  /* Match the input's background so the label "cuts" the border */
+  background-color: var(--venus-bg-secondary, #1e293b);
+  color: var(--venus-text-secondary, #cbd5e1);
 }
