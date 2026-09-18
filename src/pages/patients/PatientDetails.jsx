@@ -130,7 +130,7 @@ const PatientDetails = () => {
   if (loading || !patient) {
     return (
       <div className="flex items-center justify-center h-96">
-        <Loader2 className="animate-spin w-8 h-8 text-violet-500" />
+        <Loader2 className="animate-spin w-8 h-8 text-venus-primary-500" />
       </div>
     );
   }
@@ -151,7 +151,8 @@ const PatientDetails = () => {
     admin: {
       label: "Admin",
       icon: Shield,
-      color: "bg-violet-500/15 text-violet-400 border-violet-500/30",
+      color:
+        "bg-venus-primary-500/15 text-venus-primary-400 border-venus-primary-500/30",
     },
     doctor: {
       label: "Doctor",
@@ -193,8 +194,8 @@ const PatientDetails = () => {
 
       <div className="card">
         <div className="flex items-start gap-6">
-          <div className="w-20 h-20 rounded-2xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
-            <span className="text-2xl font-bold text-violet-400">
+          <div className="w-20 h-20 rounded-2xl bg-venus-primary-500/20 flex items-center justify-center flex-shrink-0">
+            <span className="text-2xl font-bold text-venus-primary-400">
               {getInitials(patient.firstName, patient.lastName)}
             </span>
           </div>
@@ -241,7 +242,7 @@ const PatientDetails = () => {
                 </span>
               )}
               {displayGender && (
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border bg-violet-500/15 text-violet-400 border-violet-500/30 capitalize">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border bg-venus-primary-500/15 text-venus-primary-400 border-venus-primary-500/30 capitalize">
                   <User className="w-3.5 h-3.5" />
                   {displayGender}
                 </span>
@@ -285,13 +286,13 @@ const PatientDetails = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="card">
           <h3 className="text-lg font-semibold text-venus-text-primary mb-4 flex items-center gap-2">
-            <Phone className="w-5 h-5 text-violet-400" />
+            <Phone className="w-5 h-5 text-venus-primary-400" />
             Contact Information
           </h3>
           <div className="space-y-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-violet-500/10 rounded-lg">
-                <Phone className="w-4 h-4 text-violet-400" />
+              <div className="p-2 bg-venus-primary-500/10 rounded-lg">
+                <Phone className="w-4 h-4 text-venus-primary-400" />
               </div>
               <div>
                 <p className="text-sm text-venus-text-muted">Phone</p>
@@ -301,8 +302,8 @@ const PatientDetails = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-violet-500/10 rounded-lg">
-                <Mail className="w-4 h-4 text-violet-400" />
+              <div className="p-2 bg-venus-primary-500/10 rounded-lg">
+                <Mail className="w-4 h-4 text-venus-primary-400" />
               </div>
               <div>
                 <p className="text-sm text-venus-text-muted">Email (Login)</p>
@@ -312,8 +313,8 @@ const PatientDetails = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-violet-500/10 rounded-lg">
-                <MapPin className="w-4 h-4 text-violet-400" />
+              <div className="p-2 bg-venus-primary-500/10 rounded-lg">
+                <MapPin className="w-4 h-4 text-venus-primary-400" />
               </div>
               <div>
                 <p className="text-sm text-venus-text-muted">Address</p>
@@ -424,7 +425,7 @@ const PatientDetails = () => {
 
       <div className="card">
         <h3 className="text-lg font-semibold text-venus-text-primary mb-4 flex items-center gap-2">
-          <FileText className="w-5 h-5 text-violet-400" />
+          <FileText className="w-5 h-5 text-venus-primary-400" />
           Past Medical Records
         </h3>
         {loadingRecords ? (
@@ -482,7 +483,7 @@ const PatientDetails = () => {
           <button
             onClick={handleCreateVisit}
             disabled={startingVisit}
-            className="flex items-center gap-2 px-4 py-2.5 bg-violet-500 hover:bg-violet-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-60"
+            className="flex items-center gap-2 px-4 py-2.5 bg-venus-primary-500 hover:bg-venus-primary-600 text-white rounded-lg text-sm font-medium transition-all shadow-sm disabled:opacity-60"
           >
             {startingVisit ? (
               <Loader2 className="w-5 h-5 animate-spin" />

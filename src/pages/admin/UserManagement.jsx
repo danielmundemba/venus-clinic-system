@@ -35,7 +35,6 @@ import {
   XCircle,
   PartyPopper,
   Mail,
-  Trash2,
   Loader2,
   AlertTriangle,
 } from "lucide-react";
@@ -59,11 +58,9 @@ const UserManagement = () => {
   // that row's button shows a spinner and the rest of the table stays
   // interactive.
   const [actionLoadingId, setActionLoadingId] = useState(null);
-  // The user pending deletion — having a confirmation dialog is what makes
-  // this a two-step, user-cancellable action rather than an accidental
-  // one-click delete.
-  const [deletingUser, setDeletingUser] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
+  // Same two-step pattern for resending the welcome/reset email — an admin
+  // should see exactly what this does before it fires.
+  const [resendingUser, setResendingUser] = useState(null);
   const usersPerPage = 10;
 
   // Staff job roles — these are the only roles that can be assigned when
@@ -236,7 +233,11 @@ const UserManagement = () => {
   // password, this sends Firebase's native password-reset link instead of
   // re-sending a password. The user clicks the link and picks their own
   // new password; their current password keeps working until they do.
-  const handleResendWelcomeEmail = async (user) => {
+  // Gated behind a confirmation modal (see resendingUser) so an admin can't
+  // fire this off by mistake.
+  const confirmResendWelcomeEmail = async () => {
+    if (!resendingUser) return;
+    const user = resendingUser;
     setActionLoadingId(user.id);
     setErrorMessage("");
     try {
@@ -245,6 +246,7 @@ const UserManagement = () => {
         field: "welcomeEmailResent",
       });
       setSuccessMessage(`A password reset link was sent to ${user.email}.`);
+      setResendingUser(null);
     } catch (err) {
       console.error("Error resending welcome email:", err);
       setErrorMessage(
@@ -252,38 +254,6 @@ const UserManagement = () => {
       );
     } finally {
       setActionLoadingId(null);
-    }
-  };
-
-  // Soft delete — see the note above the component: this deactivates and
-  // hides the account from this list. It does not remove the underlying
-  // Firebase Auth login, which requires the Admin SDK (Cloud Functions,
-  // Blaze plan) to do from a backend.
-  const handleDeleteAccount = async () => {
-    if (!deletingUser) return;
-    setDeleteLoading(true);
-    setErrorMessage("");
-    try {
-      await updateDoc(doc(db, "users", deletingUser.id), {
-        isActive: false,
-        deletedAt: serverTimestamp(),
-        deletedBy: currentUser?.uid || null,
-      });
-
-      await logAction("delete", "user", deletingUser.id, {
-        name: `${deletingUser.firstName} ${deletingUser.lastName}`,
-        email: deletingUser.email,
-      });
-
-      setSuccessMessage(
-        `${deletingUser.firstName} ${deletingUser.lastName}'s account was removed.`,
-      );
-      setDeletingUser(null);
-    } catch (err) {
-      console.error("Error deleting account:", err);
-      setErrorMessage("Failed to delete this account. Please try again.");
-    } finally {
-      setDeleteLoading(false);
     }
   };
 
@@ -715,7 +685,7 @@ const UserManagement = () => {
                             )}
                             {!isCurrentUser && (
                               <button
-                                onClick={() => handleResendWelcomeEmail(user)}
+                                onClick={() => setResendingUser(user)}
                                 disabled={isRowBusy}
                                 className="p-2 hover:bg-venus-bg-tertiary rounded-lg transition-colors text-venus-text-muted hover:text-venus-text-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Resend welcome email"
@@ -725,15 +695,6 @@ const UserManagement = () => {
                                 ) : (
                                   <Mail className="w-4 h-4" />
                                 )}
-                              </button>
-                            )}
-                            {!isCurrentUser && (
-                              <button
-                                onClick={() => setDeletingUser(user)}
-                                className="p-2 hover:bg-red-500/10 rounded-lg transition-colors text-venus-text-muted hover:text-red-400"
-                                title="Delete account"
-                              >
-                                <Trash2 className="w-4 h-4" />
                               </button>
                             )}
                           </div>
@@ -814,52 +775,57 @@ const UserManagement = () => {
         )}
       </div>
 
-      {/* Delete confirmation modal — only closes via explicit Cancel/Delete,
-          never on its own. */}
-      {deletingUser && (
+      {/* Resend welcome/reset email confirmation modal */}
+      {resendingUser && (
         <div
           className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-4"
-          onClick={() => !deleteLoading && setDeletingUser(null)}
+          onClick={() =>
+            actionLoadingId !== resendingUser.id && setResendingUser(null)
+          }
         >
           <div
             className="card w-full max-w-md space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-3">
-              <div className="p-2 bg-red-500/15 rounded-full shrink-0">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
+              <div className="p-2 bg-venus-primary-500/15 rounded-full shrink-0">
+                <Mail className="w-5 h-5 text-venus-primary-400" />
               </div>
               <div>
                 <h3 className="text-base font-semibold text-venus-text-primary">
-                  Delete this account?
+                  Send password reset email?
                 </h3>
                 <p className="text-sm text-venus-text-muted mt-1">
-                  {deletingUser.firstName} {deletingUser.lastName} (
-                  {deletingUser.email}) will lose access immediately and be
-                  removed from this list. This can't be undone from here.
+                  A password reset link will be emailed to{" "}
+                  <span className="font-medium text-venus-text-primary">
+                    {resendingUser.email}
+                  </span>
+                  . Their current password keeps working until they open the
+                  link and choose a new one — this does not change their
+                  password right away.
                 </p>
               </div>
             </div>
             <div className="flex gap-3 justify-end">
               <button
-                onClick={() => setDeletingUser(null)}
-                disabled={deleteLoading}
+                onClick={() => setResendingUser(null)}
+                disabled={actionLoadingId === resendingUser.id}
                 className="px-4 py-2 border border-venus-border text-venus-text-primary rounded-lg text-sm font-medium hover:bg-venus-bg-elevated transition-all disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleDeleteAccount}
-                disabled={deleteLoading}
-                className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
+                onClick={confirmResendWelcomeEmail}
+                disabled={actionLoadingId === resendingUser.id}
+                className="px-4 py-2 bg-venus-primary-500 hover:bg-venus-primary-600 text-white rounded-lg text-sm font-medium transition-all disabled:opacity-50 flex items-center gap-2"
               >
-                {deleteLoading ? (
+                {actionLoadingId === resendingUser.id ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" /> Deleting...
+                    <Loader2 className="w-4 h-4 animate-spin" /> Sending...
                   </>
                 ) : (
                   <>
-                    <Trash2 className="w-4 h-4" /> Delete Account
+                    <Mail className="w-4 h-4" /> Send Reset Email
                   </>
                 )}
               </button>

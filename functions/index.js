@@ -1,56 +1,83 @@
-import functions from 'firebase-functions';
-import admin from 'firebase-admin';
-import nodemailer from 'nodemailer';
+const functions = require("firebase-functions");
+const admin = require("firebase-admin");
+const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
+const gmailEmail = functions.config().gmail.email;
+const gmailPassword = functions.config().gmail.password;
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: (process.env.SMTP_SECURE || 'false') === 'true',
+  service: "gmail",
   auth: {
-    user: process.env.SMTP_USER,
-    password: process.env.SMTP_PASSWORD,
+    user: gmailEmail,
+    pass: gmailPassword,
   },
 });
 
-export const sendAccountCreatedEmail = functions.https.onCall(async (data) => {
-  const email = data?.email;
-  const name = data?.name || 'User';
-  const password = data?.password || 'Venus@123';
-  const loginUrl = data?.loginUrl || 'https://venus-clinic-system.firebaseapp.com/login';
+// handleCodeInApp: true means the link points straight at YOUR app's URL
+// (with ?mode=resetPassword&oobCode=... appended by Firebase) instead of
+// Firebase's default hosted action-handler page.
+const actionCodeSettings = {
+  url: "https://venus-clinic-system.web.app/reset-password",
+  handleCodeInApp: true,
+};
 
-  if (!email) {
-    throw new functions.https.HttpsError('invalid-argument', 'Email is required.');
-  }
+function buildResetEmailHtml(link) {
+  return `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; color:#1f2937;">
+      <h2 style="margin-bottom: 8px;">Reset your password</h2>
+      <p>We received a request to reset the password for your Venus Clinic System account.</p>
+      <p style="margin: 24px 0;">
+        <a href="${link}"
+           style="display:inline-block;padding:12px 24px;background:#4f46e5;color:#ffffff;
+                  border-radius:8px;text-decoration:none;font-weight:600;">
+          Reset Password
+        </a>
+      </p>
+      <p style="color:#6b7280;font-size:13px;">
+        This link expires in 1 hour. If you didn't request a password reset,
+        you can safely ignore this email — your password will stay the same.
+      </p>
+    </div>
+  `;
+}
 
-  try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || 'Venus Clinic <noreply@venus-clinic.com>',
-      to: email,
-      subject: 'Your Venus Clinic account has been created',
-      html: `
-        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2937;">
-          <h2 style="color: #7c3aed;">Welcome to Venus Clinic</h2>
-          <p>Hello ${name},</p>
-          <p>Your Venus Clinic account has been created successfully.</p>
-          <p><strong>Login email:</strong> ${email}</p>
-          <p><strong>Default password:</strong> ${password}</p>
-          <p>Use this password to sign in at:</p>
-          <p><a href="${loginUrl}">${loginUrl}</a></p>
-          <p>For security, please change your password after you log in.</p>
-          <p>Regards,<br />Venus Clinic</p>
-        </div>
-      `,
-      text: `Hello ${name},\n\nYour Venus Clinic account has been created successfully.\nLogin email: ${email}\nDefault password: ${password}\nLogin here: ${loginUrl}\n\nPlease change your password after logging in.\n\nRegards,\nVenus Clinic`,
-    });
+exports.sendPasswordResetEmail = functions.https.onCall(
+  async (data, context) => {
+    const email = ((data && data.email) || "").trim().toLowerCase();
 
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to send welcome email:', error);
-    throw new functions.https.HttpsError(
-      'internal',
-      'Unable to send the welcome email right now. Please try again later.',
-    );
-  }
-});
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "A valid email address is required.",
+      );
+    }
+
+    try {
+      const link = await admin
+        .auth()
+        .generatePasswordResetLink(email, actionCodeSettings);
+
+      await transporter.sendMail({
+        from: `"Venus Clinic System" <${gmailEmail}>`,
+        to: email,
+        subject: "Reset your Venus Clinic password",
+        html: buildResetEmailHtml(link),
+      });
+
+      return { success: true };
+    } catch (error) {
+      // Don't reveal whether the account exists — respond success either way.
+      if (error.code === "auth/user-not-found") {
+        return { success: true };
+      }
+
+      console.error("sendPasswordResetEmail error:", error);
+      throw new functions.https.HttpsError(
+        "internal",
+        "Something went wrong sending the reset email. Please try again.",
+      );
+    }
+  },
+);

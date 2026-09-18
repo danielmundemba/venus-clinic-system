@@ -1,9 +1,12 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  verifyPasswordResetCode,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   updateProfile,
+  confirmPasswordReset as firebaseConfirmPasswordReset,
 } from "firebase/auth";
 import {
   doc,
@@ -16,6 +19,11 @@ import {
 import app from "./config";
 import { auth, db } from "./config";
 import { generatePatientNumber } from "./db";
+
+const actionCodeSettings = {
+  url: "https://venus-clinic-system.web.app/reset-password", // <-- update to your real domain
+  handleCodeInApp: true,
+};
 
 export const registerStaff = async (email, password, staffData) => {
   const { initializeApp, deleteApp } = await import("firebase/app");
@@ -210,3 +218,12 @@ export const getUserRole = async (uid) => {
 export const onAuthChange = (callback) => {
   return onAuthStateChanged(auth, callback);
 };
+
+export const requestPasswordReset = (email) =>
+  firebaseSendPasswordResetEmail(auth, email, actionCodeSettings);
+
+export const verifyResetCode = (oobCode) =>
+  verifyPasswordResetCode(auth, oobCode);
+
+export const confirmPasswordReset = (oobCode, newPassword) =>
+  firebaseConfirmPasswordReset(auth, oobCode, newPassword);

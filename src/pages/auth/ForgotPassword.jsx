@@ -3,10 +3,10 @@ import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { requestPasswordReset } from "../../firebase/passwordReset";
-import { sendPasswordResetLinkEmail } from "../../services/emailService";
+import { requestPasswordReset } from "../../firebase/auth";
+import { getAuthErrorMessage } from "../../utils/authErrors";
 import FloatingInput from "../../components/common/FloatingInput";
-import { KeyRound } from "lucide-react";
+import { Activity, MailCheck } from "lucide-react";
 
 const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -16,6 +16,7 @@ const ForgotPassword = () => {
   const [generalError, setGeneralError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sentTo, setSentTo] = useState("");
 
   const {
     register,
@@ -23,25 +24,17 @@ const ForgotPassword = () => {
     formState: { errors },
   } = useForm({ resolver: zodResolver(forgotPasswordSchema) });
 
-  const onSubmit = async ({ email }) => {
+  const onSubmit = async (data) => {
     setSubmitting(true);
     setGeneralError("");
     try {
-      const { token, displayName } = await requestPasswordReset(email);
-
-      // Always show the same success state, whether or not an
-      // account exists for that email — avoids leaking who's registered.
-      if (token) {
-        await sendPasswordResetLinkEmail({
-          toEmail: email,
-          toName: displayName,
-          resetToken: token,
-        });
-      }
-
+      // Calls the "sendPasswordResetEmail" Cloud Function, which generates a
+      // reset link via the Admin SDK and emails it through Firebase's mail system.
+      await requestPasswordReset(data.email);
+      setSentTo(data.email);
       setSent(true);
     } catch (err) {
-      setGeneralError(err.message || "Something went wrong. Please try again.");
+      setGeneralError(getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
@@ -51,18 +44,19 @@ const ForgotPassword = () => {
     return (
       <div className="w-full text-center">
         <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-glow logo-bg">
-          <KeyRound className="w-10 h-10 logo-icon" />
+          <MailCheck className="w-10 h-10 logo-icon" />
         </div>
         <h1 className="text-2xl font-bold text-venus-text-primary">
-          Check your email
+          Check your inbox
         </h1>
         <p className="text-venus-text-muted mt-2">
-          If an account exists for that address, we've sent a link to reset your
-          password. The link expires in 1 hour.
+          If an account exists for <span className="font-medium">{sentTo}</span>
+          , we've sent a link to reset your password. The link expires in 1
+          hour.
         </p>
         <Link
           to="/login"
-          className="text-venus-primary hover:underline text-sm mt-6 inline-block"
+          className="inline-block mt-6 text-sm text-venus-primary hover:underline"
         >
           Back to Sign In
         </Link>
@@ -74,10 +68,10 @@ const ForgotPassword = () => {
     <div className="w-full">
       <div className="text-center mb-8">
         <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-glow logo-bg">
-          <KeyRound className="w-10 h-10 logo-icon" />
+          <Activity className="w-10 h-10 logo-icon" />
         </div>
         <h1 className="text-2xl font-bold text-venus-text-primary">
-          Forgot Password
+          Forgot Password?
         </h1>
         <p className="text-venus-text-muted mt-1">
           Enter your email and we'll send you a reset link

@@ -18,7 +18,6 @@ import {
 
 const emptyForm = {
   name: "",
-  dosageOptions: "",
   unitPrice: "",
   stock: "",
   lowStockThreshold: "10",
@@ -61,7 +60,6 @@ const MedicationCatalog = () => {
     setEditingId(med.id);
     setForm({
       name: med.name,
-      dosageOptions: (med.dosageOptions || []).join(", "),
       unitPrice: String(med.unitPrice),
       stock: String(med.stock),
       lowStockThreshold: String(med.lowStockThreshold ?? 10),
@@ -91,10 +89,6 @@ const MedicationCatalog = () => {
     try {
       const payload = {
         name: form.name.trim(),
-        dosageOptions: form.dosageOptions
-          .split(",")
-          .map((d) => d.trim())
-          .filter(Boolean),
         unitPrice: form.unitPrice,
         stock: form.stock,
         lowStockThreshold: form.lowStockThreshold,
@@ -103,7 +97,6 @@ const MedicationCatalog = () => {
       if (editingId) {
         await updateMedicationCatalog(editingId, {
           name: payload.name,
-          dosageOptions: payload.dosageOptions,
           unitPrice: parseFloat(payload.unitPrice),
           stock: parseInt(payload.stock),
           lowStockThreshold: parseInt(payload.lowStockThreshold),
@@ -138,8 +131,7 @@ const MedicationCatalog = () => {
             Medication Catalog
           </h1>
           <p className="text-venus-text-muted mt-1">
-            Manage medications, prices, and stock levels available for
-            prescribing.
+            Manage medications, prices, and stock levels for the pharmacy.
           </p>
         </div>
         <button
@@ -160,9 +152,6 @@ const MedicationCatalog = () => {
                   Medication
                 </th>
                 <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">
-                  Dosage Options
-                </th>
-                <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">
                   Unit Price
                 </th>
                 <th className="text-left text-xs font-semibold text-venus-text-muted uppercase tracking-wider px-6 py-4">
@@ -176,14 +165,14 @@ const MedicationCatalog = () => {
             <tbody className="divide-y divide-venus-border">
               {loading ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center">
+                  <td colSpan="4" className="px-6 py-12 text-center">
                     <Loader2 className="w-8 h-8 text-venus-primary-400 animate-spin mx-auto" />
                   </td>
                 </tr>
               ) : medications.length === 0 ? (
                 <tr>
                   <td
-                    colSpan="5"
+                    colSpan="4"
                     className="px-6 py-12 text-center text-venus-text-muted"
                   >
                     No medications in the catalog yet. Add one to get started.
@@ -204,13 +193,6 @@ const MedicationCatalog = () => {
                           {med.name}
                         </p>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <p className="text-sm text-venus-text-secondary">
-                        {med.dosageOptions?.length
-                          ? med.dosageOptions.join(", ")
-                          : "—"}
-                      </p>
                     </td>
                     <td className="px-6 py-4">
                       <p className="text-sm text-venus-text-primary">
@@ -276,20 +258,6 @@ const MedicationCatalog = () => {
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="input-field"
                   placeholder="Amoxicillin"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-venus-text-secondary mb-1.5">
-                  Dosage Options
-                </label>
-                <input
-                  value={form.dosageOptions}
-                  onChange={(e) =>
-                    setForm({ ...form, dosageOptions: e.target.value })
-                  }
-                  className="input-field"
-                  placeholder="250mg, 500mg (comma separated)"
                 />
               </div>
 

@@ -12,6 +12,7 @@ import {
   ClipboardList,
   HeartPulse,
   Pill,
+  ChevronRight,
 } from "lucide-react";
 import { logoutUser } from "../../firebase/auth";
 import { DoorOpen } from "lucide-react";
@@ -30,19 +31,19 @@ const navItems = [
     path: "/patients",
     label: "Patients",
     icon: Users,
-    roles: ["admin", "doctor", "receptionist", "nurse", "pharmacist"],
+    roles: ["doctor", "receptionist", "nurse"],
   },
   {
     path: "/appointments",
     label: "Appointments",
     icon: CalendarDays,
-    roles: ["admin", "doctor", "receptionist", "nurse"],
+    roles: ["doctor", "receptionist", "nurse"],
   },
   {
     path: "/medical-records",
     label: "Medical Records",
     icon: ClipboardList,
-    roles: ["admin", "receptionist", "nurse", "doctor", "pharmacist"],
+    roles: ["receptionist", "nurse", "doctor", "pharmacist"],
   },
   {
     path: "/admin/users",
@@ -90,6 +91,14 @@ const personalNavItems = [
     icon: Receipt,
   },
 ];
+
+const getInitials = (name) => {
+  if (!name) return "U";
+  const parts = name.trim().split(/\s+/);
+  const first = parts[0]?.[0] || "";
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return `${first}${last}`.toUpperCase() || "U";
+};
 
 const Sidebar = () => {
   const { user, userRole } = useAuth();
@@ -163,28 +172,33 @@ const Sidebar = () => {
         <NavLink
           to="/profile"
           className={({ isActive }) => `
-            mb-4 block px-4 py-2 rounded-lg transition-all duration-200 border
+            group mb-4 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 border cursor-pointer
             ${
               isActive
-                ? "bg-venus-primary-500/10 border-venus-primary-500/30"
-                : "bg-venus-bg-tertiary border-transparent hover:bg-venus-bg-elevated hover:border-venus-border"
+                ? "bg-venus-primary-500/10 border-venus-primary-500/30 shadow-sm"
+                : "bg-venus-bg-tertiary border-transparent hover:bg-venus-bg-elevated hover:border-venus-border hover:shadow-sm"
             }
           `}
           title="View and edit your profile"
         >
-          <p className="text-sm font-medium text-venus-text-primary truncate">
-            {user?.displayName || "User"}
-          </p>
-          <p className="text-xs text-venus-text-muted capitalize">{userRole}</p>
+          <div className="w-9 h-9 shrink-0 rounded-full bg-venus-primary-500/20 flex items-center justify-center text-venus-primary-400 text-xs font-bold">
+            {getInitials(user?.displayName)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-venus-text-primary truncate">
+              {user?.displayName || "User"}
+            </p>
+            <p className="text-xs text-venus-text-muted capitalize truncate">
+              {userRole}
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 shrink-0 text-venus-text-muted transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-venus-text-primary" />
         </NavLink>
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-4 py-3 text-venus-danger hover:bg-venus-danger/10 rounded-lg transition-all duration-200"
         >
-          <LogOut
-            className="w-5 h-5"
-            style={{ transform: "scaleX(-1)" }}
-          />
+          <LogOut className="w-5 h-5" style={{ transform: "scaleX(-1)" }} />
           <span className="font-medium">Logout</span>
         </button>
       </div>

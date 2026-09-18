@@ -1,107 +1,138 @@
-import { useState } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { confirmPasswordReset } from "../../firebase/passwordReset";
-import { sendPasswordChangedEmail } from "../../services/emailService";
+import { verifyResetCode, confirmPasswordReset } from "../../firebase/auth";
+import { getAuthErrorMessage } from "../../utils/authErrors";
 import FloatingInput from "../../components/common/FloatingInput";
-import { ShieldCheck } from "lucide-react";
+import { Activity, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 
-const resetSchema = z
+const resetPasswordSchema = z
   .object({
     password: z.string().min(6, "Password must be at least 6 characters"),
-    confirmPassword: z.string(),
+    confirmPassword: z.string().min(6, "Please confirm your password"),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
+    message: "Passwords do not match",
     path: ["confirmPassword"],
   });
 
+// "verifying" -> checking the oobCode from the email link is still valid
+// "valid"     -> code is good, show the new-password form
+// "invalid"   -> code missing / expired / already used
+// "done"      -> password was successfully reset
 const ResetPassword = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const email = searchParams.get("email") || "";
-  const token = searchParams.get("token") || "";
+  const oobCode = searchParams.get("oobCode");
 
+  const [status, setStatus] = useState("verifying");
+  const [email, setEmail] = useState("");
   const [generalError, setGeneralError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [done, setDone] = useState(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({ resolver: zodResolver(resetSchema) });
+  } = useForm({ resolver: zodResolver(resetPasswordSchema) });
 
-  const onSubmit = async ({ password }) => {
-    if (!email || !token) {
-      setGeneralError("This reset link is invalid. Please request a new one.");
-      return;
-    }
+  useEffect(() => {
+    const verify = async () => {
+      if (!oobCode) {
+        setStatus("invalid");
+        return;
+      }
+      try {
+        const accountEmail = await verifyResetCode(oobCode);
+        setEmail(accountEmail);
+        setStatus("valid");
+      } catch (err) {
+        setStatus("invalid");
+      }
+    };
+    verify();
+  }, [oobCode]);
+
+  const onSubmit = async (data) => {
     setSubmitting(true);
     setGeneralError("");
     try {
-      await confirmPasswordReset({ email, token, newPassword: password });
-
-      // Fire-and-forget confirmation email — don't block the redirect on it
-      sendPasswordChangedEmail({ toEmail: email, toName: email });
-
-      setDone(true);
-      setTimeout(() => navigate("/login", { replace: true }), 2500);
+      await confirmPasswordReset(oobCode, data.password);
+      setStatus("done");
     } catch (err) {
-      setGeneralError(err.message || "Something went wrong. Please try again.");
+      setGeneralError(getAuthErrorMessage(err));
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!email || !token) {
+  if (status === "verifying") {
+    return (
+      <div className="w-full text-center py-10">
+        <Loader2 className="w-8 h-8 mx-auto animate-spin text-venus-primary" />
+        <p className="text-venus-text-muted mt-4">Verifying your link...</p>
+      </div>
+    );
+  }
+
+  if (status === "invalid") {
     return (
       <div className="w-full text-center">
+        <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 bg-venus-danger/10">
+          <XCircle className="w-10 h-10 text-venus-danger" />
+        </div>
         <h1 className="text-2xl font-bold text-venus-text-primary">
-          Invalid Link
+          Link Expired or Invalid
         </h1>
         <p className="text-venus-text-muted mt-2">
-          This password reset link is missing or malformed.
+          This password reset link is no longer valid. Please request a new one.
         </p>
         <Link
           to="/forgot-password"
-          className="text-venus-primary hover:underline text-sm mt-6 inline-block"
+          className="inline-block mt-6 btn-primary py-3 px-6"
         >
-          Request a new link
+          Request New Link
         </Link>
       </div>
     );
   }
 
-  if (done) {
+  if (status === "done") {
     return (
       <div className="w-full text-center">
         <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-glow logo-bg">
-          <ShieldCheck className="w-10 h-10 logo-icon" />
+          <CheckCircle2 className="w-10 h-10 logo-icon" />
         </div>
         <h1 className="text-2xl font-bold text-venus-text-primary">
-          Password Updated
+          Password Reset
         </h1>
         <p className="text-venus-text-muted mt-2">
-          Redirecting you to sign in...
+          Your password has been updated. You can now sign in.
         </p>
+        <button
+          onClick={() => navigate("/login", { replace: true })}
+          className="w-full btn-primary py-3 mt-6"
+        >
+          Continue to Sign In
+        </button>
       </div>
     );
   }
 
+  // status === "valid"
   return (
     <div className="w-full">
       <div className="text-center mb-8">
         <div className="w-16 h-16 rounded-xl flex items-center justify-center mx-auto mb-4 shadow-glow logo-bg">
-          <ShieldCheck className="w-10 h-10 logo-icon" />
+          <Activity className="w-10 h-10 logo-icon" />
         </div>
         <h1 className="text-2xl font-bold text-venus-text-primary">
           Set New Password
         </h1>
         <p className="text-venus-text-muted mt-1">
-          Choose a new password for {email}
+          Resetting password for <span className="font-medium">{email}</span>
         </p>
       </div>
 

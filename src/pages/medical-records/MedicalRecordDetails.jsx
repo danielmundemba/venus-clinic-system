@@ -145,8 +145,12 @@ const MedicalRecordDetails = () => {
     loadData();
   }, [patientId, recordId]);
 
+  // Both the doctor (prescribing) and the pharmacist (dispensing) need the
+  // catalog to pick medications from a dropdown instead of typing them out.
   useEffect(() => {
-    if (canEditStage("doctor")) getMedications().then(setMedicationCatalog);
+    if (canEditStage("doctor") || canEditStage("pharmacy")) {
+      getMedications().then(setMedicationCatalog);
+    }
   }, [userRole]);
 
   const loadData = async () => {
@@ -355,6 +359,8 @@ const MedicalRecordDetails = () => {
         row.medicationId = value;
         row.name = med?.name || "";
         row.unitPrice = med?.unitPrice || 0;
+        // The catalog no longer carries dosage options, so dosage is
+        // always a plain free-text field the doctor fills in themselves.
         row.dosage = "";
       } else {
         row[field] = value;
@@ -453,6 +459,33 @@ const MedicalRecordDetails = () => {
       ...prev,
       medications: prev.medications.map((m, i) => {
         if (i !== idx) return m;
+
+        // Picking a medication from the catalog dropdown auto-fills name
+        // and unit price and recomputes the line total. Picking the blank
+        // "Choose medication..." option clears the link so the pharmacist
+        // can fall back to typing it in manually.
+        if (field === "medicationId") {
+          const selected = medicationCatalog.find((cat) => cat.id === value);
+          if (!selected) {
+            return {
+              ...m,
+              medicationId: "",
+              name: "",
+              unitPrice: "",
+              price: "",
+            };
+          }
+          const quantity = parseInt(m.quantity) || 1;
+          return {
+            ...m,
+            medicationId: selected.id,
+            name: selected.name,
+            unitPrice: selected.unitPrice,
+            quantity,
+            price: (parseFloat(selected.unitPrice) || 0) * quantity,
+          };
+        }
+
         const updated = { ...m, [field]: value };
         if (field === "quantity" && m.medicationId) {
           updated.price =
@@ -1133,7 +1166,8 @@ const MedicalRecordDetails = () => {
                               </option>
                             ))}
                           </select>
-                          <select
+                          <input
+                            type="text"
                             value={rx.dosage}
                             onChange={(e) =>
                               updatePrescriptionRow(
@@ -1143,15 +1177,9 @@ const MedicalRecordDetails = () => {
                               )
                             }
                             className="input-field"
+                            placeholder="Dosage (e.g., 500mg)"
                             disabled={!med}
-                          >
-                            <option value="">Dosage...</option>
-                            {med?.dosageOptions?.map((d) => (
-                              <option key={d} value={d}>
-                                {d}
-                              </option>
-                            ))}
-                          </select>
+                          />
                           <input
                             type="number"
                             min="1"
@@ -1341,7 +1369,7 @@ const MedicalRecordDetails = () => {
                       Medication #{idx + 1}{" "}
                       {med.medicationId && (
                         <span className="text-xs text-venus-primary-400">
-                          (prescribed)
+                          (from catalog)
                         </span>
                       )}
                     </span>
@@ -1357,10 +1385,19 @@ const MedicalRecordDetails = () => {
 
                   {med.medicationId ? (
                     <>
-                      <p className="text-sm text-venus-text-primary">
-                        {med.name} — {med.dosage}
+                      <p className="text-sm text-venus-text-primary font-medium">
+                        {med.name}
                       </p>
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <input
+                          type="text"
+                          value={med.dosage}
+                          onChange={(e) =>
+                            updateMedication(idx, "dosage", e.target.value)
+                          }
+                          className="input-field"
+                          placeholder="Dosage (e.g., 500mg)"
+                        />
                         <input
                           type="number"
                           min="1"
@@ -1377,40 +1414,67 @@ const MedicalRecordDetails = () => {
                       </div>
                     </>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <input
-                        value={med.name}
-                        onChange={(e) =>
-                          updateMedication(idx, "name", e.target.value)
-                        }
-                        className="input-field"
-                        placeholder="Medication name"
-                      />
-                      <input
-                        value={med.dosage}
-                        onChange={(e) =>
-                          updateMedication(idx, "dosage", e.target.value)
-                        }
-                        className="input-field"
-                        placeholder="Dosage (e.g., 500mg)"
-                      />
-                      <input
-                        value={med.quantity}
-                        onChange={(e) =>
-                          updateMedication(idx, "quantity", e.target.value)
-                        }
-                        className="input-field"
-                        placeholder="Quantity"
-                      />
-                      <input
-                        type="number"
-                        value={med.price}
-                        onChange={(e) =>
-                          updateMedication(idx, "price", e.target.value)
-                        }
-                        className="input-field"
-                        placeholder="Price (K)"
-                      />
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-venus-text-muted mb-1.5">
+                          Choose from Catalog
+                        </label>
+                        <select
+                          value=""
+                          onChange={(e) =>
+                            updateMedication(
+                              idx,
+                              "medicationId",
+                              e.target.value,
+                            )
+                          }
+                          className="input-field"
+                        >
+                          <option value="">
+                            Select medication or enter manually below...
+                          </option>
+                          {medicationCatalog.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} (K{m.unitPrice}, {m.stock} in stock)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input
+                          value={med.name}
+                          onChange={(e) =>
+                            updateMedication(idx, "name", e.target.value)
+                          }
+                          className="input-field"
+                          placeholder="Medication name"
+                        />
+                        <input
+                          value={med.dosage}
+                          onChange={(e) =>
+                            updateMedication(idx, "dosage", e.target.value)
+                          }
+                          className="input-field"
+                          placeholder="Dosage (e.g., 500mg)"
+                        />
+                        <input
+                          value={med.quantity}
+                          onChange={(e) =>
+                            updateMedication(idx, "quantity", e.target.value)
+                          }
+                          className="input-field"
+                          placeholder="Quantity"
+                        />
+                        <input
+                          type="number"
+                          value={med.price}
+                          onChange={(e) =>
+                            updateMedication(idx, "price", e.target.value)
+                          }
+                          className="input-field"
+                          placeholder="Price (K)"
+                        />
+                      </div>
                     </div>
                   )}
 

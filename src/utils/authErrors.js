@@ -23,6 +23,14 @@ const AUTH_ERROR_MESSAGES = {
     "Firebase Authentication is not configured for this project.",
   "auth/internal-error":
     "Firebase Authentication returned an internal error. Check the browser console for details.",
+  "auth/expired-action-code":
+    "This reset link has expired. Please request a new one.",
+  "auth/invalid-action-code":
+    "This reset link is invalid or has already been used.",
+  "auth/user-disabled":
+    "This account has been disabled. Contact your administrator.",
+  "auth/weak-password":
+    "Please choose a stronger password (at least 8 characters, Uppercase letter, lowercase letter, number and special character).",
 };
 
 export const getAuthErrorMessage = (error) => {

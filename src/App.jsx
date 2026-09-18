@@ -12,6 +12,8 @@ import AuthLayout from "./components/layout/AuthLayout";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import PageSkeleton from "./components/common/PageSkeleton";
 import Login from "./pages/auth/Login";
+import ForgotPassword from "./pages/auth/ForgotPassword";
+import ResetPassword from "./pages/auth/ResetPassword";
 
 // Lazy-loaded pages — each becomes its own JS chunk
 const UnifiedDashboard = lazy(
@@ -72,6 +74,8 @@ function App() {
           <Routes>
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<Login />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
             </Route>
 
             <Route

@@ -117,12 +117,8 @@ const PatientList = () => {
     return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(""), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
+  // Success toast stays up until the user dismisses it with the X — no
+  // auto-clear timer, same pattern as User Management.
 
   const handleToggleStatus = async (patientId, currentStatus) => {
     try {
